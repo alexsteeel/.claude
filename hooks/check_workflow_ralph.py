@@ -1,0 +1,183 @@
+#!/usr/bin/env python3
+"""
+Ralph Autonomous Workflow Hook
+
+Simple confirmation-based workflow control for /ralph-implement-python-task.
+Differences from check_workflow.py:
+- No "need feedback" bypass (autonomous mode)
+- Allows stop on hold (## Blocks + status=hold)
+"""
+
+import json
+import sys
+from pathlib import Path
+from datetime import datetime
+
+STATE_DIR = Path.home() / ".claude" / "workflow-state"
+ACTIVE_TASK_FILE = STATE_DIR / "active_ralph_task.txt"
+
+CONFIRMATION_PHRASE = "i confirm that all task phases are fully completed"
+
+CHECKLIST = """
+## Checklist for /ralph-implement-python-task
+
+### Preparation
+- [ ] Задача получена и содержит `## Plan`
+- [ ] Статус задачи = work
+- [ ] TodoWrite создан для отслеживания фаз (0-12)
+- [ ] Файлы из Scope прочитаны
+
+### Implementation
+- [ ] Implementation выполнен по плану
+
+### Testing (Initial)
+- [ ] Unit tests написаны и проходят
+- [ ] API tests написаны (если есть endpoints)
+- [ ] UI tests написаны (если есть frontend)
+- [ ] Edge cases покрыты тестами
+- [ ] Existing tests не сломаны
+
+### Reviews
+- [ ] `/pr-review-toolkit:review-pr` выполнен
+- [ ] `/security-review` выполнен
+- [ ] `/codex-review` выполнен
+- [ ] Все review записаны в задачу
+- [ ] Все замечания исправлены ИЛИ отмечено почему некорректны
+
+### Testing (Final)
+- [ ] Все тесты проходят после исправлений
+
+### Finalization
+- [ ] Linters проходят (ruff, djlint)
+- [ ] Cleanup выполнен (мусор удалён, разрешения проверены)
+- [ ] Коммит создан
+- [ ] Report с commit hash записан в задачу (status=done)
+- [ ] Финальный отчёт выведен
+
+📖 Command reference: /ralph-implement-python-task
+
+⚠️ If blocked, record issue in ## Blocks section and set status='hold'.
+"""
+
+
+def get_active_task() -> str | None:
+    """Get currently active task reference."""
+    if ACTIVE_TASK_FILE.exists():
+        return ACTIVE_TASK_FILE.read_text().strip()
+    return None
+
+
+def set_active_task(task_ref: str):
+    """Set currently active task reference."""
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    ACTIVE_TASK_FILE.write_text(task_ref)
+
+
+def clear_active_task():
+    """Clear active task when workflow completes."""
+    ACTIVE_TASK_FILE.unlink(missing_ok=True)
+
+
+def extract_task_ref(prompt: str) -> str | None:
+    """Extract task reference like 'project#N' from prompt."""
+    import re
+    match = re.search(r'([a-zA-Z0-9_-]+#\d+)', prompt)
+    return match.group(1) if match else None
+
+
+def get_last_assistant_message(transcript_path: str) -> str:
+    """Read the last assistant message from transcript file."""
+    try:
+        path = Path(transcript_path)
+        if not path.exists():
+            return ""
+
+        last_assistant_msg = ""
+        with path.open() as f:
+            for line in f:
+                try:
+                    entry = json.loads(line.strip())
+                    if entry.get("type") == "assistant":
+                        message = entry.get("message", {})
+                        content = message.get("content", [])
+                        for block in content:
+                            if isinstance(block, dict) and block.get("type") == "text":
+                                last_assistant_msg = block.get("text", "")
+                except json.JSONDecodeError:
+                    continue
+        return last_assistant_msg
+    except Exception:
+        return ""
+
+
+def handle_prompt_submit(hook_input: dict):
+    """Check if ralph workflow is starting."""
+    prompt = hook_input.get("prompt", "")
+
+    if "ralph-implement-python-task" in prompt.lower():
+        task_ref = extract_task_ref(prompt)
+        if task_ref:
+            set_active_task(task_ref)
+            print(f"[RALPH HOOK] Autonomous workflow started for {task_ref}", file=sys.stderr)
+
+
+def handle_stop(hook_input: dict):
+    """Block stop unless confirmed or on hold."""
+    transcript_path = hook_input.get("transcript_path", "")
+    last_message = get_last_assistant_message(transcript_path) if transcript_path else ""
+
+    task_ref = get_active_task()
+    if not task_ref:
+        return 0  # No active workflow, allow stop
+
+    # Check for confirmation phrase
+    if CONFIRMATION_PHRASE in last_message.lower():
+        clear_active_task()
+        print(f"\n[RALPH HOOK] ✅ Workflow confirmed complete: {task_ref}", file=sys.stderr)
+        return 0  # Allow stop
+
+    # Check for hold status (## Blocks recorded)
+    if "## blocks" in last_message.lower() or 'status="hold"' in last_message.lower():
+        clear_active_task()
+        print(f"\n[RALPH HOOK] ⚠️ Workflow on HOLD: {task_ref}", file=sys.stderr)
+        return 0  # Allow stop when on hold
+
+
+    # Block - confirmation not found
+    reason = f"🤖 AUTONOMOUS WORKFLOW NOT CONFIRMED\n\n"
+    reason += f"Task: {task_ref}\n\n"
+    reason += "To complete the workflow, verify all items and write:\n"
+    reason += "```\nI confirm that all task phases are fully completed.\n```\n\n"
+    reason += "If blocked, record issue in ## Blocks and set status='hold'.\n\n"
+    reason += CHECKLIST
+
+    response = {"decision": "block", "reason": reason}
+    print(json.dumps(response))
+
+    print(f"\n[RALPH HOOK] Blocking stop - confirmation not found for {task_ref}", file=sys.stderr)
+    return 2
+
+
+def main():
+    try:
+        input_data = sys.stdin.read()
+        if not input_data:
+            return 0
+
+        hook_input = json.loads(input_data)
+        event = hook_input.get("hook_event_name", "")
+
+        if event == "UserPromptSubmit":
+            handle_prompt_submit(hook_input)
+            return 0
+        elif event == "Stop":
+            return handle_stop(hook_input)
+
+        return 0
+    except Exception as e:
+        Path("/tmp/ralph_hook_error.log").write_text(f"{datetime.now()}: {e}\n")
+        return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

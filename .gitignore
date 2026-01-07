@@ -1,0 +1,27 @@
+# Ignore everything
+*
+
+# But not these directories
+!commands/
+!commands/**
+!skills/
+!skills/**
+!agents/
+!agents/**
+!hooks/
+!hooks/**
+
+# And not .gitignore itself
+!.gitignore
+
+# And not .claude settings
+!.claude/
+!.claude/**
+
+# And not CLAUDE.md and README.md
+!CLAUDE.md
+!README.md
+
+# And not scripts
+!scripts/
+!scripts/**
