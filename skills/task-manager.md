@@ -49,6 +49,9 @@ Completion report here.
 
 ## Review
 Code review feedback here.
+
+## Blocks
+What blocks this task (for hold status).
 ```
 
 ## Task Sections
@@ -59,6 +62,7 @@ Code review feedback here.
 | Plan | Implementation plan, approach |
 | Report | Work completion report |
 | Review | Code review feedback |
+| Blocks | What blocks this task (used with hold status) |
 
 ## Workflows
 
@@ -87,7 +91,7 @@ create_task(
 update_task(
     project="my-project",
     number=1,
-    status="work",           # todo, work, done
+    status="work",           # hold, todo, work, done, approved
     module="auth",           # area/module name
     started="2024-01-15",
     branch="feature/task-1",
@@ -95,13 +99,14 @@ update_task(
     plan="Updated plan",
     report="Work completed",
     review="LGTM",
+    blocks="Waiting for API spec",
     depends_on=[2, 3]
 )
 ```
 
 ### Multiline Text
 
-Use real line breaks for multiline content in `body`, `plan`, `report`, `review`:
+Use real line breaks for multiline content in `body`, `plan`, `report`, `review`, `blocks`:
 
 ```
 update_task(

@@ -97,12 +97,8 @@ git commit -m "WIP: {project}#{number} - blocked: {краткое описани
 ```
 
 ```python
-# 2. Записать блокировку в задачу
-task = get_task(project="<project>", number=<N>)
-existing_body = task.get("body", "")
-
+# 2. Записать блокировку в задачу (используй поле blocks!)
 blocks_text = """
-## Blocks
 - [{YYYY-MM-DD HH:MM}] {Краткое описание проблемы}
   - Что пытался сделать: {описание действий}
   - Почему не получилось: {причина блокировки}
@@ -114,7 +110,7 @@ update_task(
     project="<project>",
     number=<N>,
     status="hold",
-    body=existing_body + "\n" + blocks_text
+    blocks=blocks_text  # ← поле blocks, НЕ body!
 )
 ```
 
@@ -142,7 +138,14 @@ task = get_task(project="<project>", number=<N>)
 
 ### Шаг 2: Проверь наличие плана
 
-Задача ДОЛЖНА содержать секцию `## Plan` в body.
+Задача ДОЛЖНА содержать план в поле `plan` (не в body!).
+
+```python
+task = get_task(project="<project>", number=<N>)
+plan = task.get("plan", "")
+if not plan:
+    # БЛОКИРОВКА — плана нет
+```
 
 **Если плана нет — БЛОКИРОВКА:**
 
@@ -151,11 +154,10 @@ update_task(
     project="<project>",
     number=<N>,
     status="hold",
-    body=existing_body + """
-## Blocks
+    blocks="""
 - [{timestamp}] Отсутствует план реализации
   - Что пытался сделать: начать реализацию задачи
-  - Почему не получилось: задача не содержит секции ## Plan
+  - Почему не получилось: задача не содержит плана в поле plan
   - Что нужно от человека: выполнить /ralph-plan-task {project}#{number}
 """
 )
@@ -273,10 +275,16 @@ update_task(
 
 ### Обработка результатов
 
-1. **Запиши результаты в задачу** через md-task-mcp:
-   ```markdown
-   ## Code Review (pr-review-toolkit)
-   - [Найденные проблемы]
+1. **Запиши результаты в поле `review`** через md-task-mcp:
+   ```python
+   update_task(
+       project="<project>",
+       number=<N>,
+       review="""
+   ### Code Review (pr-review-toolkit)
+   - [Найденные проблемы и их статус]
+   """
+   )
    ```
 
 2. **Для каждого замечания**:
@@ -304,10 +312,21 @@ Security review проверяет:
 
 ### Обработка результатов
 
-1. **Запиши результаты в задачу** через md-task-mcp:
-   ```markdown
-   ## Security Review
-   - [Найденные уязвимости]
+1. **Добавь результаты в поле `review`** через md-task-mcp:
+   ```python
+   # Получи текущий review и добавь security review
+   task = get_task(project="<project>", number=<N>)
+   existing_review = task.get("review", "")
+
+   update_task(
+       project="<project>",
+       number=<N>,
+       review=existing_review + """
+
+   ### Security Review
+   - [Найденные уязвимости и их статус]
+   """
+   )
    ```
 
 2. **Для каждого замечания**:
@@ -345,9 +364,9 @@ Task(
    - **НЕ ПРОДОЛЖАЙ** к следующим фазам
    - **НЕ ЗАМЕНЯЙ** codex-ревью своим собственным анализом
 
-2. **Review записан в задачу?**
-   - Проверь что в задаче появилась секция Review от Codex
-   - Если секция отсутствует → агент не выполнил задачу корректно → **blocks + hold → ВЫЙТИ**
+2. **Review записан в поле `review` задачи?**
+   - Проверь что в задаче появился Codex review в поле `review`
+   - Если отсутствует → агент не выполнил задачу корректно → **blocks + hold → ВЫЙТИ**
 
 ### Обработка результатов
 
@@ -510,20 +529,14 @@ git config user.email "$(git log -1 --format='%ae')"
 
 ### Шаг 2: Запиши отчёт в задачу
 
-Получи текущее содержимое задачи, добавь Report с информацией о коммите:
+Запиши отчёт в поле `report` (не в body!):
 
 ```python
-# 1. Получи текущую задачу
-task = get_task(project="<project>", number=<N>)
-existing_body = task.get("body", "")
-
-# 2. Получи информацию о коммите
+# 1. Получи информацию о коммите
 # git log -1 --format='%H %s' → commit_hash commit_message
 
-# 3. Подготовь отчёт
+# 2. Подготовь отчёт
 report_text = """
-## Report
-
 ### Commit
 - Hash: {commit_hash}
 - Message: {commit_message}
@@ -540,13 +553,13 @@ report_text = """
 - Ручное тестирование: [что проверено]
 """
 
-# 4. Обнови задачу и переведи в done
+# 3. Обнови задачу и переведи в done
 update_task(
     project="<project>",
     number=<N>,
     status="done",
     completed="<YYYY-MM-DD>",
-    body=existing_body + "\n" + report_text
+    report=report_text  # ← поле report, НЕ body!
 )
 ```
 
@@ -572,7 +585,7 @@ cleanup completed
 ## Checklist
 
 ### Preparation
-- [ ] Задача получена и содержит `## Plan`
+- [ ] Задача получена и содержит план в поле `plan`
 - [ ] Статус задачи = work
 - [ ] TodoWrite создан для отслеживания фаз (0-12)
 - [ ] Файлы из Scope прочитаны
@@ -599,7 +612,7 @@ cleanup completed
 - [ ] Linters проходят (ruff, djlint)
 - [ ] Cleanup выполнен (мусор удалён, разрешения проверены)
 - [ ] Коммит создан
-- [ ] Report с commit hash записан в задачу (status=done)
+- [ ] Report с commit hash записан в поле `report` (status=done)
 - [ ] Финальный отчёт выведен
 
 ## ⚠️ ОБЯЗАТЕЛЬНОЕ ПОДТВЕРЖДЕНИЕ
@@ -653,12 +666,8 @@ git commit -m "WIP: {project}#{number} - blocked: {краткое описани
 ```
 
 ```python
-# 2. Записать блокировку
-task = get_task(project="<project>", number=<N>)
-existing_body = task.get("body", "")
-
+# 2. Записать блокировку (используй поле blocks!)
 blocks_text = """
-## Blocks
 - [{YYYY-MM-DD HH:MM}] {Краткое описание проблемы}
   - Что пытался сделать: {описание действий}
   - Почему не получилось: {причина блокировки}
@@ -670,7 +679,7 @@ update_task(
     project="<project>",
     number=<N>,
     status="hold",
-    body=existing_body + "\n" + blocks_text
+    blocks=blocks_text  # ← поле blocks, НЕ body!
 )
 ```
 

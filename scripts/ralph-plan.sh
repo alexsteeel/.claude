@@ -6,6 +6,10 @@
 # Usage: ./ralph-plan.sh <project> <task_numbers...>
 # Example: ./ralph-plan.sh myproject 1 2 3
 #
+# ⚠️  WARNING: This script uses --dangerously-skip-permissions flag!
+#     Claude will execute commands without asking for confirmation.
+#     Only run on trusted codebases in isolated environments.
+#
 
 set -e
 
@@ -86,7 +90,7 @@ for TASK_NUM in "${TASKS[@]}"; do
 
     # Run Claude interactively
     # User can interact with Claude during planning
-    if claude --model opus "/ralph-plan-task ${TASK_REF}"; then
+    if claude --model opus --dangerously-skip-permissions "/ralph-plan-task ${TASK_REF}"; then
         print_success "Planning completed for ${TASK_REF}"
         COMPLETED+=("$TASK_REF")
     else
@@ -136,5 +140,5 @@ fi
 
 echo ""
 echo -e "To implement planned tasks, run:"
-echo -e "  ${GREEN}./ralph-implement.sh ${PROJECT} <task_numbers...>${NC}"
+echo -e "  ${GREEN}./ralph-implement.sh ${PROJECT} ${TASKS[*]}${NC}"
 echo ""

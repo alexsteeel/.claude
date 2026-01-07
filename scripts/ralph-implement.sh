@@ -6,6 +6,10 @@
 # Usage: ./ralph-implement.sh <project> <task_numbers...>
 # Example: ./ralph-implement.sh myproject 1 2 3
 #
+# ⚠️  WARNING: This script uses --dangerously-skip-permissions flag!
+#     Claude will execute commands without asking for confirmation.
+#     Only run on trusted codebases in isolated environments.
+#
 
 set -e
 
@@ -136,7 +140,9 @@ for TASK_NUM in "${TASKS[@]}"; do
     echo -e "Starting autonomous implementation...\n"
 
     # Build Claude command
-    CLAUDE_CMD="claude -p --model opus"
+    # Use stream-json to force stdout output (bypasses /dev/tty)
+    # Note: stream-json requires --verbose flag
+    CLAUDE_CMD="claude -p --model opus --verbose --output-format stream-json"
 
     if [[ -n "$MAX_BUDGET" ]]; then
         CLAUDE_CMD="$CLAUDE_CMD --max-budget-usd $MAX_BUDGET"
@@ -146,11 +152,18 @@ for TASK_NUM in "${TASKS[@]}"; do
     CLAUDE_CMD="$CLAUDE_CMD --dangerously-skip-permissions"
 
     # Run Claude in print mode (autonomous)
-    # Output goes to both terminal and log file
+    # Use script to capture terminal output (Claude writes to /dev/tty, not stdout)
     cd "$WORKING_DIR"
 
     set +e  # Don't exit on error
-    $CLAUDE_CMD "/ralph-implement-python-task ${TASK_REF}" 2>&1 | tee "$LOG_FILE"
+    # Full JSON to log file, filtered text+tools to terminal
+    $CLAUDE_CMD "/ralph-implement-python-task ${TASK_REF}" 2>&1 | tee "$LOG_FILE" | stdbuf -oL jq --unbuffered -r '
+      select(.type == "assistant" and .message.content) |
+      .message.content[] |
+      if .type == "text" then .text
+      elif .type == "tool_use" then "🔧 " + .name + ": " + (.input | tostring | .[0:100])
+      else empty end
+    ' 2>/dev/null
     EXIT_CODE=${PIPESTATUS[0]}
     set -e
 
