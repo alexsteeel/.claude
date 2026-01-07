@@ -19,7 +19,9 @@ ACTIVE_TASK_FILE = STATE_DIR / "active_ralph_task.txt"
 CONFIRMATION_PHRASE = "i confirm that all task phases are fully completed"
 
 CHECKLIST = """
-## Checklist for /ralph-implement-python-task
+## 🚨 PRODUCTION QUALITY CHECKLIST
+
+**Это PRODUCTION код, НЕ MVP!** Все пункты ОБЯЗАТЕЛЬНЫ.
 
 ### Preparation
 - [ ] Задача получена и содержит `## Plan`
@@ -28,27 +30,27 @@ CHECKLIST = """
 - [ ] Файлы из Scope прочитаны
 
 ### Implementation
-- [ ] Implementation выполнен по плану
+- [ ] Implementation выполнен ПОЛНОСТЬЮ по плану (не упрощён)
 
-### Testing (Initial)
+### Testing (Initial) — ВСЕ тесты должны проходить
 - [ ] Unit tests написаны и проходят
 - [ ] API tests написаны (если есть endpoints)
 - [ ] UI tests написаны (если есть frontend)
 - [ ] Edge cases покрыты тестами
 - [ ] Existing tests не сломаны
 
-### Reviews
+### Reviews — ВСЕ замечания обработаны
 - [ ] `/pr-review-toolkit:review-pr` выполнен
 - [ ] `/security-review` выполнен
 - [ ] `/codex-review` выполнен
 - [ ] Все review записаны в задачу
-- [ ] Все замечания исправлены ИЛИ отмечено почему некорректны
+- [ ] ВСЕ замечания исправлены ИЛИ обоснованно отклонены
 
 ### Testing (Final)
-- [ ] Все тесты проходят после исправлений
+- [ ] ВСЕ тесты проходят после исправлений
 
-### Finalization
-- [ ] Linters проходят (ruff, djlint)
+### Finalization — код должен быть чистым
+- [ ] ВСЕ ошибки linters исправлены (ruff, djlint)
 - [ ] Cleanup выполнен (мусор удалён, разрешения проверены)
 - [ ] Коммит создан
 - [ ] Report с commit hash записан в задачу (status=done)
@@ -56,7 +58,8 @@ CHECKLIST = """
 
 📖 Command reference: /ralph-implement-python-task
 
-⚠️ If blocked, record issue in ## Blocks section and set status='hold'.
+⚠️ ЗАПРЕЩЕНО: пропускать фазы, оставлять failing tests, игнорировать замечания.
+⚠️ Если не можешь выполнить качественно → hold + ## Blocks.
 """
 
 
@@ -144,11 +147,12 @@ def handle_stop(hook_input: dict):
 
 
     # Block - confirmation not found
-    reason = f"🤖 AUTONOMOUS WORKFLOW NOT CONFIRMED\n\n"
+    reason = f"🚨 PRODUCTION WORKFLOW NOT CONFIRMED\n\n"
     reason += f"Task: {task_ref}\n\n"
-    reason += "To complete the workflow, verify all items and write:\n"
+    reason += "⚠️ Это PRODUCTION код, НЕ MVP! Все этапы ОБЯЗАТЕЛЬНЫ.\n\n"
+    reason += "To complete the workflow, verify ALL items and write:\n"
     reason += "```\nI confirm that all task phases are fully completed.\n```\n\n"
-    reason += "If blocked, record issue in ## Blocks and set status='hold'.\n\n"
+    reason += "If blocked, commit WIP changes, record issue in ## Blocks and set status='hold'.\n\n"
     reason += CHECKLIST
 
     response = {"decision": "block", "reason": reason}

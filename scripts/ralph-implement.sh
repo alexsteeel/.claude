@@ -103,6 +103,27 @@ FAILED=()
 ON_HOLD=()
 
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+SESSION_LOG="${LOG_DIR}/session_${PROJECT}_${TIMESTAMP}.log"
+
+# Initialize session log
+{
+    echo "═══════════════════════════════════════════════════════════════"
+    echo "RALPH IMPLEMENTATION SESSION"
+    echo "═══════════════════════════════════════════════════════════════"
+    echo ""
+    echo "Started:     $(date '+%Y-%m-%d %H:%M:%S')"
+    echo "Project:     ${PROJECT}"
+    echo "Tasks:       ${TASKS[*]}"
+    echo "Working dir: ${WORKING_DIR}"
+    echo "Max budget:  ${MAX_BUDGET:-unlimited}"
+    echo ""
+    echo "───────────────────────────────────────────────────────────────"
+    echo "TASK EXECUTION LOG"
+    echo "───────────────────────────────────────────────────────────────"
+} > "$SESSION_LOG"
+
+echo -e "Session log: ${GREEN}${SESSION_LOG}${NC}"
+echo ""
 
 for TASK_NUM in "${TASKS[@]}"; do
     CURRENT=$((CURRENT + 1))
@@ -133,21 +154,26 @@ for TASK_NUM in "${TASKS[@]}"; do
     EXIT_CODE=${PIPESTATUS[0]}
     set -e
 
-    # Check result
+    # Check result and log to session
+    TASK_END=$(date '+%Y-%m-%d %H:%M:%S')
     if [[ $EXIT_CODE -eq 0 ]]; then
         # Check if task was put on hold (look for hold markers in log)
         if grep -q 'status="hold"' "$LOG_FILE" 2>/dev/null || grep -q '## Blocks' "$LOG_FILE" 2>/dev/null; then
             print_warning "Task ${TASK_REF} put ON HOLD (blocked)"
             ON_HOLD+=("$TASK_REF")
+            echo "[${TASK_END}] ⚠ ${TASK_REF} - ON HOLD (blocked)" >> "$SESSION_LOG"
         else
             print_success "Implementation completed for ${TASK_REF}"
             COMPLETED+=("$TASK_REF")
+            echo "[${TASK_END}] ✓ ${TASK_REF} - COMPLETED" >> "$SESSION_LOG"
         fi
     else
         print_error "Implementation failed for ${TASK_REF} (exit code: $EXIT_CODE)"
         FAILED+=("$TASK_REF")
+        echo "[${TASK_END}] ✗ ${TASK_REF} - FAILED (exit code: $EXIT_CODE)" >> "$SESSION_LOG"
     fi
 
+    echo "  Log: ${LOG_FILE}" >> "$SESSION_LOG"
     echo ""
 done
 
@@ -180,6 +206,45 @@ fi
 
 echo ""
 echo -e "Logs saved to: ${GREEN}${LOG_DIR}/${NC}"
+echo ""
+
+# Write final summary to session log
+{
+    echo ""
+    echo "───────────────────────────────────────────────────────────────"
+    echo "SESSION SUMMARY"
+    echo "───────────────────────────────────────────────────────────────"
+    echo ""
+    echo "Completed: $(date '+%Y-%m-%d %H:%M:%S')"
+    echo ""
+    echo "Results:"
+    echo "  Completed: ${#COMPLETED[@]}"
+    echo "  On Hold:   ${#ON_HOLD[@]}"
+    echo "  Failed:    ${#FAILED[@]}"
+    echo ""
+    if [[ ${#COMPLETED[@]} -gt 0 ]]; then
+        echo "Completed tasks:"
+        for task in "${COMPLETED[@]}"; do
+            echo "  ✓ $task"
+        done
+    fi
+    if [[ ${#ON_HOLD[@]} -gt 0 ]]; then
+        echo "On hold tasks:"
+        for task in "${ON_HOLD[@]}"; do
+            echo "  ⚠ $task"
+        done
+    fi
+    if [[ ${#FAILED[@]} -gt 0 ]]; then
+        echo "Failed tasks:"
+        for task in "${FAILED[@]}"; do
+            echo "  ✗ $task"
+        done
+    fi
+    echo ""
+    echo "═══════════════════════════════════════════════════════════════"
+} >> "$SESSION_LOG"
+
+echo -e "Session log: ${GREEN}${SESSION_LOG}${NC}"
 echo ""
 
 # Exit with error if any tasks failed
