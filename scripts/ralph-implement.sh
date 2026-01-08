@@ -156,14 +156,9 @@ for TASK_NUM in "${TASKS[@]}"; do
     cd "$WORKING_DIR"
 
     set +e  # Don't exit on error
-    # Full JSON to log file, filtered text+tools to terminal
-    $CLAUDE_CMD "/ralph-implement-python-task ${TASK_REF}" 2>&1 | tee "$LOG_FILE" | stdbuf -oL jq --unbuffered -r '
-      select(.type == "assistant" and .message.content) |
-      .message.content[] |
-      if .type == "text" then .text
-      elif .type == "tool_use" then "🔧 " + .name + ": " + (.input | tostring | .[0:100])
-      else empty end
-    ' 2>/dev/null
+    # Full JSON to log file, formatted output to terminal
+    SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
+    $CLAUDE_CMD "/ralph-implement-python-task ${TASK_REF}" 2>&1 | tee "$LOG_FILE" | python3 "$SCRIPT_DIR/format-output.py"
     EXIT_CODE=${PIPESTATUS[0]}
     set -e
 
