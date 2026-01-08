@@ -105,6 +105,7 @@ CURRENT=0
 COMPLETED=()
 FAILED=()
 ON_HOLD=()
+declare -A TASK_DURATIONS
 
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 SESSION_LOG="${LOG_DIR}/session_${PROJECT}_${TIMESTAMP}.log"
@@ -139,6 +140,19 @@ for TASK_NUM in "${TASKS[@]}"; do
     echo -e "Log file: ${LOG_FILE}"
     echo -e "Starting autonomous implementation...\n"
 
+    # Record start time
+    TASK_START_TIME=$(date +%s)
+    TASK_START_HUMAN=$(date '+%Y-%m-%d %H:%M:%S')
+
+    # Initialize task log with header
+    {
+        echo "═══════════════════════════════════════════════════════════════"
+        echo "Task: ${TASK_REF}"
+        echo "Started: ${TASK_START_HUMAN}"
+        echo "═══════════════════════════════════════════════════════════════"
+        echo ""
+    } > "$LOG_FILE"
+
     # Build Claude command
     # Use stream-json to force stdout output (bypasses /dev/tty)
     # Note: stream-json requires --verbose flag
@@ -156,34 +170,60 @@ for TASK_NUM in "${TASKS[@]}"; do
     cd "$WORKING_DIR"
 
     set +e  # Don't exit on error
-    # Full JSON to log file, formatted output to terminal
+    # Formatted output to both terminal and log file
     SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
-    $CLAUDE_CMD "/ralph-implement-python-task ${TASK_REF}" 2>&1 | tee "$LOG_FILE" | python3 "$SCRIPT_DIR/format-output.py"
+    $CLAUDE_CMD "/ralph-implement-python-task ${TASK_REF}" 2>&1 | python3 "$SCRIPT_DIR/format-output.py" | tee -a "$LOG_FILE"
     EXIT_CODE=${PIPESTATUS[0]}
     set -e
 
+    # Calculate duration
+    TASK_END_TIME=$(date +%s)
+    TASK_DURATION=$((TASK_END_TIME - TASK_START_TIME))
+    TASK_DURATIONS["$TASK_REF"]=$TASK_DURATION
+
+    # Format duration as HH:MM:SS
+    DURATION_FMT=$(printf '%02d:%02d:%02d' $((TASK_DURATION/3600)) $((TASK_DURATION%3600/60)) $((TASK_DURATION%60)))
+
     # Check result and log to session
     TASK_END=$(date '+%Y-%m-%d %H:%M:%S')
+
+    # Add footer to task log
+    {
+        echo ""
+        echo "═══════════════════════════════════════════════════════════════"
+        echo "Finished: ${TASK_END}"
+        echo "Duration: ${DURATION_FMT}"
+        echo "Exit code: ${EXIT_CODE}"
+        echo "═══════════════════════════════════════════════════════════════"
+    } >> "$LOG_FILE"
     if [[ $EXIT_CODE -eq 0 ]]; then
         # Check if task was put on hold (look for hold markers in log)
-        if grep -q 'status="hold"' "$LOG_FILE" 2>/dev/null || grep -q '## Blocks' "$LOG_FILE" 2>/dev/null; then
-            print_warning "Task ${TASK_REF} put ON HOLD (blocked)"
+        # In formatted logs, look for task update with hold status or Blocks mention
+        if grep -qi 'update_task.*hold' "$LOG_FILE" 2>/dev/null || grep -q '## Blocks' "$LOG_FILE" 2>/dev/null || grep -q '→ hold' "$LOG_FILE" 2>/dev/null; then
+            print_warning "Task ${TASK_REF} put ON HOLD (blocked) [${DURATION_FMT}]"
             ON_HOLD+=("$TASK_REF")
-            echo "[${TASK_END}] ⚠ ${TASK_REF} - ON HOLD (blocked)" >> "$SESSION_LOG"
+            echo "[${TASK_END}] ⚠ ${TASK_REF} - ON HOLD (${DURATION_FMT})" >> "$SESSION_LOG"
         else
-            print_success "Implementation completed for ${TASK_REF}"
+            print_success "Implementation completed for ${TASK_REF} [${DURATION_FMT}]"
             COMPLETED+=("$TASK_REF")
-            echo "[${TASK_END}] ✓ ${TASK_REF} - COMPLETED" >> "$SESSION_LOG"
+            echo "[${TASK_END}] ✓ ${TASK_REF} - COMPLETED (${DURATION_FMT})" >> "$SESSION_LOG"
         fi
     else
-        print_error "Implementation failed for ${TASK_REF} (exit code: $EXIT_CODE)"
+        print_error "Implementation failed for ${TASK_REF} (exit code: $EXIT_CODE) [${DURATION_FMT}]"
         FAILED+=("$TASK_REF")
-        echo "[${TASK_END}] ✗ ${TASK_REF} - FAILED (exit code: $EXIT_CODE)" >> "$SESSION_LOG"
+        echo "[${TASK_END}] ✗ ${TASK_REF} - FAILED (${DURATION_FMT})" >> "$SESSION_LOG"
     fi
 
     echo "  Log: ${LOG_FILE}" >> "$SESSION_LOG"
     echo ""
 done
+
+# Calculate total duration
+TOTAL_DURATION=0
+for duration in "${TASK_DURATIONS[@]}"; do
+    TOTAL_DURATION=$((TOTAL_DURATION + duration))
+done
+TOTAL_DURATION_FMT=$(printf '%02d:%02d:%02d' $((TOTAL_DURATION/3600)) $((TOTAL_DURATION%3600/60)) $((TOTAL_DURATION%60)))
 
 # Summary
 echo -e "\n${BLUE}════════════════════════════════════════════════════════${NC}"
@@ -191,29 +231,42 @@ echo -e "${BLUE}  SUMMARY${NC}"
 echo -e "${BLUE}════════════════════════════════════════════════════════${NC}"
 echo ""
 
+# Format duration helper
+format_duration() {
+    local secs=$1
+    printf '%02d:%02d:%02d' $((secs/3600)) $((secs%3600/60)) $((secs%60))
+}
+
 if [[ ${#COMPLETED[@]} -gt 0 ]]; then
     echo -e "${GREEN}Completed (${#COMPLETED[@]}):${NC}"
     for task in "${COMPLETED[@]}"; do
-        echo -e "  ✓ $task (status: done)"
+        dur=${TASK_DURATIONS[$task]}
+        dur_fmt=$(format_duration $dur)
+        echo -e "  ✓ $task  ${CYAN}${dur_fmt}${NC}"
     done
 fi
 
 if [[ ${#ON_HOLD[@]} -gt 0 ]]; then
     echo -e "${YELLOW}On Hold (${#ON_HOLD[@]}):${NC}"
     for task in "${ON_HOLD[@]}"; do
-        echo -e "  ⚠ $task (needs human attention)"
+        dur=${TASK_DURATIONS[$task]}
+        dur_fmt=$(format_duration $dur)
+        echo -e "  ⚠ $task  ${CYAN}${dur_fmt}${NC}"
     done
 fi
 
 if [[ ${#FAILED[@]} -gt 0 ]]; then
     echo -e "${RED}Failed (${#FAILED[@]}):${NC}"
     for task in "${FAILED[@]}"; do
-        echo -e "  ✗ $task"
+        dur=${TASK_DURATIONS[$task]}
+        dur_fmt=$(format_duration $dur)
+        echo -e "  ✗ $task  ${CYAN}${dur_fmt}${NC}"
     done
 fi
 
 echo ""
-echo -e "Logs saved to: ${GREEN}${LOG_DIR}/${NC}"
+echo -e "Total time:  ${CYAN}${TOTAL_DURATION_FMT}${NC}"
+echo -e "Logs:        ${GREEN}${LOG_DIR}/${NC}"
 echo ""
 
 # Write final summary to session log
@@ -223,7 +276,8 @@ echo ""
     echo "SESSION SUMMARY"
     echo "───────────────────────────────────────────────────────────────"
     echo ""
-    echo "Completed: $(date '+%Y-%m-%d %H:%M:%S')"
+    echo "Finished:    $(date '+%Y-%m-%d %H:%M:%S')"
+    echo "Total time:  ${TOTAL_DURATION_FMT}"
     echo ""
     echo "Results:"
     echo "  Completed: ${#COMPLETED[@]}"
@@ -233,19 +287,22 @@ echo ""
     if [[ ${#COMPLETED[@]} -gt 0 ]]; then
         echo "Completed tasks:"
         for task in "${COMPLETED[@]}"; do
-            echo "  ✓ $task"
+            dur_fmt=$(format_duration ${TASK_DURATIONS[$task]})
+            echo "  ✓ $task  ($dur_fmt)"
         done
     fi
     if [[ ${#ON_HOLD[@]} -gt 0 ]]; then
         echo "On hold tasks:"
         for task in "${ON_HOLD[@]}"; do
-            echo "  ⚠ $task"
+            dur_fmt=$(format_duration ${TASK_DURATIONS[$task]})
+            echo "  ⚠ $task  ($dur_fmt)"
         done
     fi
     if [[ ${#FAILED[@]} -gt 0 ]]; then
         echo "Failed tasks:"
         for task in "${FAILED[@]}"; do
-            echo "  ✗ $task"
+            dur_fmt=$(format_duration ${TASK_DURATIONS[$task]})
+            echo "  ✗ $task  ($dur_fmt)"
         done
     fi
     echo ""
