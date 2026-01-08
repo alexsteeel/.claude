@@ -203,10 +203,16 @@ for TASK_NUM in "${TASKS[@]}"; do
             print_warning "Task ${TASK_REF} put ON HOLD (blocked) [${DURATION_FMT}]"
             ON_HOLD+=("$TASK_REF")
             echo "[${TASK_END}] ⚠ ${TASK_REF} - ON HOLD (${DURATION_FMT})" >> "$SESSION_LOG"
-        else
+        # Check if task was properly completed (confirmation phrase present)
+        elif grep -q "I confirm that all task phases are fully completed" "$LOG_FILE" 2>/dev/null; then
             print_success "Implementation completed for ${TASK_REF} [${DURATION_FMT}]"
             COMPLETED+=("$TASK_REF")
             echo "[${TASK_END}] ✓ ${TASK_REF} - COMPLETED (${DURATION_FMT})" >> "$SESSION_LOG"
+        else
+            # Exit code 0 but no confirmation - task may be incomplete
+            print_warning "Task ${TASK_REF} incomplete (no confirmation phrase) [${DURATION_FMT}]"
+            ON_HOLD+=("$TASK_REF")
+            echo "[${TASK_END}] ⚠ ${TASK_REF} - INCOMPLETE (${DURATION_FMT})" >> "$SESSION_LOG"
         fi
     else
         print_error "Implementation failed for ${TASK_REF} (exit code: $EXIT_CODE) [${DURATION_FMT}]"
