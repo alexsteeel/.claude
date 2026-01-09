@@ -1,6 +1,6 @@
 # Claude Code Configuration
 
-This repository contains Claude Code configuration: commands, agents, and hooks.
+This repository contains Claude Code configuration: commands, skills, and hooks.
 
 ## Structure
 
@@ -8,7 +8,6 @@ This repository contains Claude Code configuration: commands, agents, and hooks.
 ~/.claude/
 ├── commands/           # Slash commands (/command-name)
 ├── skills/             # User-defined skills
-├── agents/             # Custom Task agents (subagent_type)
 ├── hooks/              # Workflow automation hooks
 └── scripts/            # Shell scripts for running loops
 ```
@@ -85,12 +84,6 @@ The script automatically detects and diagnoses failures:
 | `/create-tasks` | Create tasks in md-task-mcp from requirements |
 | `/memorize-task` | Update memory with task summary |
 
-## Agents
-
-Custom agents for `Task(subagent_type="agent-name")`.
-
-Place agent definition files in `~/.claude/agents/` directory.
-
 ## Hooks
 
 ### check_workflow.py
@@ -166,6 +159,8 @@ All workflows require comprehensive testing:
 **Key difference**: Ralph is fully autonomous - no stops, auto-commits, blocks+hold on problems.
 
 ## Ralph Workflow Architecture
+
+**Daily cycle:** Evening planning → Overnight implementation → Morning review
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -264,38 +259,3 @@ update_task(
 ```
 
 Then EXIT immediately. WIP commit ensures next task in loop starts clean.
-
-## Git Conventions
-
-Commit message format:
-- Start with verb: Add, Fix, Update, Remove, Refactor
-- No period at end
-- No emoji, no Co-Authored-By
-
-Examples:
-- `Add attendance export to Excel`
-- `Fix camera auto-reconnect on connection loss`
-- `Update employee validation rules`
-
-## File Permissions
-
-| Type | Mode | Description |
-|------|------|-------------|
-| `*.py` | 644 | Python modules |
-| `*.sh` | 755 | Shell scripts |
-| `*.html`, `*.css`, `*.js` | 644 | Web assets |
-| `*.md`, `*.json`, `*.yml` | 644 | Config and docs |
-
-## Docker Containers
-
-Configuration is synced to:
-- `your-project-devcontainer-1`
-- `your-project-devcontainer-2`
-
-User in containers: `claude` (not `vscode`)
-
-Sync command:
-```bash
-docker cp ~/.claude/commands/file.md container:/home/claude/.claude/commands/
-docker exec --user root container chown claude:claude /home/claude/.claude/commands/file.md
-```
