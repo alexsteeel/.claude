@@ -33,7 +33,7 @@ WORKING_DIR=/path/to/project MAX_BUDGET=5 ./scripts/ralph-implement.sh myproject
 | Script | Mode | Description |
 |--------|------|-------------|
 | `ralph-plan.sh` | Interactive | Runs `/ralph-plan-task` for each task, allows user communication |
-| `ralph-implement.sh` | Autonomous | Runs `/ralph-implement-python-task` with `--print`, logs to `~/.claude/logs/` |
+| `ralph-implement.sh` | Autonomous | Runs `/ralph-implement-python-task` for each task, then `/ralph-batch-check` |
 
 ## Commands
 
@@ -44,6 +44,7 @@ WORKING_DIR=/path/to/project MAX_BUDGET=5 ./scripts/ralph-implement.sh myproject
 | `/execute-python-task` | Full workflow: planning → approval → implementation → testing |
 | `/ralph-plan-task project#N` | Planning only with human interaction (universal) |
 | `/ralph-implement-python-task project#N` | Autonomous implementation (requires plan) |
+| `/ralph-batch-check project#1 project#2...` | Run full test suite after batch, fix indirect issues |
 
 ### Reviews
 
@@ -129,7 +130,7 @@ All workflows require comprehensive testing:
 2. Read Plan Context (files from Scope)
 3. Implementation
 4. Initial Testing
-5. Code Review (pr-review-toolkit)
+5. Code Review (pr-review-toolkit + code-simplifier)
 6. Security Review (/security-review)
 7. Codex Review
 8. Final Testing
@@ -191,6 +192,14 @@ All workflows require comprehensive testing:
 │  │  Hook: UserPromptSubmit → track task       │                     │
 │  │  Hook: Stop → require confirmation OR hold │                     │
 │  └────────────────────────────────────────────┘                     │
+├─────────────────────────────────────────────────────────────────────┤
+│  BATCH CHECK PHASE (after all tasks)                                 │
+│  ┌──────────────────┐  ┌───────────────────────────┐                │
+│  │ralph-implement.sh│─▶│  /ralph-batch-check       │                │
+│  │ (auto after loop)│  │  - Full test suite        │                │
+│  └──────────────────┘  │  - Fix indirect issues    │                │
+│                        │  - Create check task      │                │
+│                        └───────────────────────────┘                │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 

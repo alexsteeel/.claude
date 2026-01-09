@@ -322,3 +322,44 @@ echo ""
 if [[ ${#FAILED[@]} -gt 0 ]]; then
     exit 1
 fi
+
+# Run batch check if there are completed tasks
+if [[ ${#COMPLETED[@]} -gt 0 ]]; then
+    echo -e "\n${BLUE}════════════════════════════════════════════════════════${NC}"
+    echo -e "${BLUE}  BATCH CHECK${NC}"
+    echo -e "${BLUE}════════════════════════════════════════════════════════${NC}\n"
+
+    # Build task refs string (e.g., "project#1 project#2 project#3")
+    TASK_REFS=""
+    for task in "${COMPLETED[@]}"; do
+        TASK_REFS="${TASK_REFS} ${task}"
+    done
+    TASK_REFS="${TASK_REFS# }"  # Trim leading space
+
+    BATCH_LOG="${LOG_DIR}/batch_check_${PROJECT}_${TIMESTAMP}.log"
+    echo -e "Running batch check for: ${GREEN}${TASK_REFS}${NC}"
+    echo -e "Log: ${GREEN}${BATCH_LOG}${NC}\n"
+
+    BATCH_START_TIME=$(date +%s)
+
+    # Run batch check
+    cd "$WORKING_DIR"
+    $CLAUDE_CMD "/ralph-batch-check ${TASK_REFS}" 2>&1 | python3 "$SCRIPT_DIR/format-output.py" | tee "$BATCH_LOG"
+
+    BATCH_END_TIME=$(date +%s)
+    BATCH_DURATION=$((BATCH_END_TIME - BATCH_START_TIME))
+    BATCH_DURATION_FMT=$(printf '%02d:%02d:%02d' $((BATCH_DURATION/3600)) $((BATCH_DURATION%3600/60)) $((BATCH_DURATION%60)))
+
+    echo -e "\n${GREEN}Batch check completed in ${BATCH_DURATION_FMT}${NC}"
+
+    # Log to session
+    {
+        echo ""
+        echo "───────────────────────────────────────────────────────────────"
+        echo "BATCH CHECK"
+        echo "───────────────────────────────────────────────────────────────"
+        echo "Tasks checked: ${TASK_REFS}"
+        echo "Duration: ${BATCH_DURATION_FMT}"
+        echo "Log: ${BATCH_LOG}"
+    } >> "$SESSION_LOG"
+fi

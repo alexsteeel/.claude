@@ -41,6 +41,7 @@ CHECKLIST = """
 
 ### Reviews — ВСЕ замечания обработаны
 - [ ] `/pr-review-toolkit:review-pr` выполнен
+- [ ] `code-simplifier` выполнен
 - [ ] `/security-review` выполнен
 - [ ] `/codex-review` выполнен
 - [ ] Все review записаны в задачу
