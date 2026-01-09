@@ -63,6 +63,8 @@ usage() {
     echo "Options (via environment variables):"
     echo "  WORKING_DIR    Working directory for Claude (default: current directory)"
     echo "  MAX_BUDGET     Maximum budget in USD per task (default: no limit)"
+    echo "  MAX_RETRIES    Max retry attempts on API timeout (default: 3)"
+    echo "  RETRY_DELAY    Delay in seconds between retries (default: 30)"
     echo ""
     echo "Example:"
     echo "  $0 myproject 1 2 3"
@@ -87,6 +89,8 @@ TASKS=("$@")
 # Optional settings
 WORKING_DIR="${WORKING_DIR:-$(pwd)}"
 MAX_BUDGET="${MAX_BUDGET:-}"
+MAX_RETRIES="${MAX_RETRIES:-3}"
+RETRY_DELAY="${RETRY_DELAY:-30}"
 
 print_header
 
@@ -165,16 +169,60 @@ for TASK_NUM in "${TASKS[@]}"; do
     # Add permission bypass for autonomous mode
     CLAUDE_CMD="$CLAUDE_CMD --dangerously-skip-permissions"
 
-    # Run Claude in print mode (autonomous)
-    # Use script to capture terminal output (Claude writes to /dev/tty, not stdout)
+    # Run Claude in print mode (autonomous) with retry on API timeout
     cd "$WORKING_DIR"
-
-    set +e  # Don't exit on error
-    # Formatted output to both terminal and log file
     SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
-    $CLAUDE_CMD "/ralph-implement-python-task ${TASK_REF}" 2>&1 | python3 "$SCRIPT_DIR/format-output.py" | tee -a "$LOG_FILE"
-    EXIT_CODE=${PIPESTATUS[0]}
-    set -e
+
+    ATTEMPT=1
+    RESUME_SESSION=""
+    EXIT_CODE=1
+
+    while [[ $ATTEMPT -le $MAX_RETRIES ]]; do
+        if [[ $ATTEMPT -gt 1 ]]; then
+            echo -e "\n${YELLOW}Retry attempt ${ATTEMPT}/${MAX_RETRIES} after ${RETRY_DELAY}s delay...${NC}"
+            sleep "$RETRY_DELAY"
+            {
+                echo ""
+                echo "───────────────────────────────────────────────────────────────"
+                echo "RETRY ATTEMPT ${ATTEMPT}/${MAX_RETRIES} at $(date '+%Y-%m-%d %H:%M:%S')"
+                echo "───────────────────────────────────────────────────────────────"
+                echo ""
+            } >> "$LOG_FILE"
+        fi
+
+        set +e  # Don't exit on error
+
+        # Build command with optional resume
+        RUN_CMD="$CLAUDE_CMD"
+        if [[ -n "$RESUME_SESSION" ]]; then
+            RUN_CMD="$RUN_CMD --resume $RESUME_SESSION"
+            echo -e "${CYAN}Resuming session: ${RESUME_SESSION}${NC}"
+        else
+            RUN_CMD="$RUN_CMD \"/ralph-implement-python-task ${TASK_REF}\""
+        fi
+
+        # Run and capture output
+        eval "$RUN_CMD" 2>&1 | python3 "$SCRIPT_DIR/format-output.py" | tee -a "$LOG_FILE"
+        EXIT_CODE=${PIPESTATUS[0]}
+        set -e
+
+        # Check if retryable error (API timeout)
+        if [[ $EXIT_CODE -ne 0 ]]; then
+            if grep -q "Tokens: 0 in / 0 out" "$LOG_FILE" 2>/dev/null || grep -q "Unknown error" "$LOG_FILE" 2>/dev/null; then
+                # Extract session ID for resume (from log)
+                SESSION_ID=$(grep -o 'Session: [a-f0-9-]*' "$LOG_FILE" 2>/dev/null | tail -1 | awk '{print $2}')
+                if [[ -n "$SESSION_ID" && $ATTEMPT -lt $MAX_RETRIES ]]; then
+                    RESUME_SESSION="$SESSION_ID"
+                    print_warning "API timeout detected, will retry with --resume"
+                    ATTEMPT=$((ATTEMPT + 1))
+                    continue
+                fi
+            fi
+        fi
+
+        # Success or non-retryable error - exit loop
+        break
+    done
 
     # Calculate duration
     TASK_END_TIME=$(date +%s)
@@ -215,9 +263,50 @@ for TASK_NUM in "${TASKS[@]}"; do
             echo "[${TASK_END}] ⚠ ${TASK_REF} - INCOMPLETE (${DURATION_FMT})" >> "$SESSION_LOG"
         fi
     else
+        # Diagnose failure type
+        FAILURE_TYPE="UNKNOWN"
+        FAILURE_DETAIL=""
+
+        # Check for API timeout (Tokens: 0 in / 0 out)
+        if grep -q "Tokens: 0 in / 0 out" "$LOG_FILE" 2>/dev/null; then
+            FAILURE_TYPE="API_TIMEOUT"
+            FAILURE_DETAIL="API connection timeout or disconnect"
+        # Check for rate limit
+        elif grep -qi "rate.limit\|too.many.requests\|429" "$LOG_FILE" 2>/dev/null; then
+            FAILURE_TYPE="RATE_LIMIT"
+            FAILURE_DETAIL="API rate limit exceeded"
+        # Check for authentication error
+        elif grep -qi "unauthorized\|authentication\|401\|403" "$LOG_FILE" 2>/dev/null; then
+            FAILURE_TYPE="AUTH_ERROR"
+            FAILURE_DETAIL="Authentication or authorization error"
+        # Check for Unknown error
+        elif grep -q "Unknown error" "$LOG_FILE" 2>/dev/null; then
+            FAILURE_TYPE="UNKNOWN_ERROR"
+            FAILURE_DETAIL="Claude CLI reported unknown error"
+        fi
+
         print_error "Implementation failed for ${TASK_REF} (exit code: $EXIT_CODE) [${DURATION_FMT}]"
+
+        # Show failure diagnosis
+        if [[ "$FAILURE_TYPE" != "UNKNOWN" ]]; then
+            echo -e "${YELLOW}  Diagnosis: ${FAILURE_TYPE}${NC}"
+            echo -e "${YELLOW}  ${FAILURE_DETAIL}${NC}"
+        fi
+
+        # Show last activity from log
+        echo -e "\n${YELLOW}Last activity before failure:${NC}"
+        # Extract last few meaningful lines (skip empty and session totals)
+        grep -E "^\[|💻|📖|📝|✅|❌|🔍" "$LOG_FILE" 2>/dev/null | tail -5 || true
+        echo ""
+
+        # Show retry info if applicable
+        if [[ $ATTEMPT -gt 1 ]]; then
+            echo -e "${YELLOW}  Retries attempted: $((ATTEMPT - 1))${NC}"
+        fi
+
         FAILED+=("$TASK_REF")
-        echo "[${TASK_END}] ✗ ${TASK_REF} - FAILED (${DURATION_FMT})" >> "$SESSION_LOG"
+        echo "[${TASK_END}] ✗ ${TASK_REF} - FAILED [${FAILURE_TYPE}] (${DURATION_FMT}) [${ATTEMPT} attempts]" >> "$SESSION_LOG"
+        echo "  Diagnosis: ${FAILURE_TYPE} - ${FAILURE_DETAIL}" >> "$SESSION_LOG"
     fi
 
     echo "  Log: ${LOG_FILE}" >> "$SESSION_LOG"

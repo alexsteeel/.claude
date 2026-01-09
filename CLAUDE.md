@@ -28,12 +28,35 @@ Shell scripts for running Ralph loops manually:
 
 # With options
 WORKING_DIR=/path/to/project MAX_BUDGET=5 ./scripts/ralph-implement.sh myproject 1
+
+# With retry settings
+MAX_RETRIES=5 RETRY_DELAY=60 ./scripts/ralph-implement.sh myproject 1
 ```
 
 | Script | Mode | Description |
 |--------|------|-------------|
 | `ralph-plan.sh` | Interactive | Runs `/ralph-plan-task` for each task, allows user communication |
 | `ralph-implement.sh` | Autonomous | Runs `/ralph-implement-python-task` for each task, then `/ralph-batch-check` |
+
+### ralph-implement.sh Options
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `WORKING_DIR` | `$(pwd)` | Working directory for Claude |
+| `MAX_BUDGET` | unlimited | Maximum budget in USD per task |
+| `MAX_RETRIES` | 3 | Max retry attempts on API timeout |
+| `RETRY_DELAY` | 30 | Delay in seconds between retries |
+
+### Error Handling
+
+The script automatically detects and diagnoses failures:
+
+| Error Type | Detection | Action |
+|------------|-----------|--------|
+| `API_TIMEOUT` | `Tokens: 0 in / 0 out` | Auto-retry with `--resume` |
+| `RATE_LIMIT` | `429` or `rate limit` | Fail (manual retry needed) |
+| `AUTH_ERROR` | `401` or `403` | Fail |
+| `UNKNOWN_ERROR` | `Unknown error` | Auto-retry with `--resume` |
 
 ## Commands
 
