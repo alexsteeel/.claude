@@ -13,7 +13,7 @@ import sys
 from datetime import datetime
 
 # ANSI colors
-BLUE = "\033[0;34m"  # Claude text
+WHITE = "\033[1;37m"  # Claude text (bright white for dark terminals)
 GREEN = "\033[0;32m"  # Tool calls
 CYAN = "\033[0;36m"  # MCP calls
 YELLOW = "\033[1;33m"  # Task agents
@@ -161,7 +161,7 @@ def process_line(line: str) -> str | None:
         if item.get("type") == "text":
             text = item.get("text", "").strip()
             if text:
-                results.append(f"{BLUE}{text}{NC}")
+                results.append(f"{WHITE}{text}{NC}")
         elif item.get("type") == "tool_use":
             name = item.get("name", "")
             input_data = item.get("input", {})

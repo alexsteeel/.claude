@@ -6,10 +6,11 @@
 
 ```bash
 # Планирование задач (интерактивно)
+cd /path/to/project
 ~/.claude/scripts/ralph-plan.sh myproject 1 2 3
 
 # Реализация задач (автономно)
-~/.claude/scripts/ralph-implement.sh myproject 1 2 3
+WORKING_DIR=/path/to/project ~/.claude/scripts/ralph-implement.sh myproject 1 2 3
 ```
 
 ## Структура
@@ -65,7 +66,12 @@
 ### ralph-plan.sh — Планирование
 
 ```bash
-./scripts/ralph-plan.sh <project> <task_numbers...>
+# Запуск из директории проекта
+cd /path/to/project
+~/.claude/scripts/ralph-plan.sh <project> <task_numbers...>
+
+# Пример
+~/.claude/scripts/ralph-plan.sh myproject 1 2 3
 ```
 
 - **Режим**: интерактивный (Claude в терминале)
@@ -76,11 +82,12 @@
 ### ralph-implement.sh — Реализация
 
 ```bash
-./scripts/ralph-implement.sh <project> <task_numbers...>
+# Указать директорию проекта через WORKING_DIR
+WORKING_DIR=/path/to/project ~/.claude/scripts/ralph-implement.sh <project> <task_numbers...>
 
-# С опциями
-WORKING_DIR=/path/to/project ./scripts/ralph-implement.sh myproject 1 2 3
-MAX_BUDGET=10 ./scripts/ralph-implement.sh myproject 1
+# Примеры
+WORKING_DIR=/workspaces/myapp ~/.claude/scripts/ralph-implement.sh myproject 1 2 3
+WORKING_DIR=/workspaces/myapp MAX_BUDGET=10 ~/.claude/scripts/ralph-implement.sh myproject 1
 ```
 
 - **Режим**: автономный (`--print`, без взаимодействия)
@@ -95,10 +102,11 @@ MAX_BUDGET=10 ./scripts/ralph-implement.sh myproject 1
 
 ```bash
 # 1. Утром: планируем задачи интерактивно
-./scripts/ralph-plan.sh myproject 5 6 7
+cd /workspaces/myapp
+~/.claude/scripts/ralph-plan.sh myproject 5 6 7
 
 # 2. Днём: запускаем автономную реализацию
-./scripts/ralph-implement.sh myproject 5 6 7
+WORKING_DIR=/workspaces/myapp ~/.claude/scripts/ralph-implement.sh myproject 5 6 7
 
 # 3. Вечером: проверяем результаты
 # - Задачи в статусе "done" — готовы к ревью
