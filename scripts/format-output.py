@@ -31,17 +31,74 @@ def format_edit(i: dict) -> str:
     return f"{path} [-{old_len}/+{new_len}]"
 
 
+def _format_todos(i: dict) -> str:
+    """Format TodoWrite with task summary."""
+    todos = i.get("todos", [])
+    if not todos:
+        return "todos cleared"
+
+    # Count by status
+    in_progress = [t for t in todos if t.get("status") == "in_progress"]
+    completed = sum(1 for t in todos if t.get("status") == "completed")
+    pending = sum(1 for t in todos if t.get("status") == "pending")
+
+    # Show current task (in_progress) if any
+    if in_progress:
+        current = in_progress[0].get("activeForm", in_progress[0].get("content", "?"))
+        return f"{current} ({completed}✓ {pending}○)"
+
+    # Show summary if all completed or pending
+    if completed == len(todos):
+        return f"all {completed} tasks completed"
+
+    return f"{completed}✓ {pending}○ tasks"
+
+
+def _format_read(i: dict) -> str:
+    """Format Read tool with optional line range."""
+    path = i.get("file_path", "")
+    offset = i.get("offset")
+    limit = i.get("limit")
+
+    if offset or limit:
+        range_info = []
+        if offset:
+            range_info.append(f"from:{offset}")
+        if limit:
+            range_info.append(f"lines:{limit}")
+        return f"{path} ({', '.join(range_info)})"
+    return path
+
+
+def _format_bash(i: dict) -> str:
+    """Format Bash tool with description or command."""
+    desc = i.get("description", "")
+    cmd = i.get("command", "")
+    bg = i.get("run_in_background", False)
+
+    # Prefer description if available
+    if desc:
+        result = desc
+    else:
+        result = cmd[:120] + ("..." if len(cmd) > 120 else "")
+
+    if bg:
+        result += " [bg]"
+
+    return result
+
+
 # Tool icons and formatters
 TOOL_FORMATS = {
-    "Read": ("📖", lambda i: i.get("file_path", "")),
-    "Edit": ("✏️ ", format_edit),
+    "Read": ("📖", lambda i: _format_read(i)),
+    "Edit": ("✏️", format_edit),
     "Write": ("📝", lambda i: i.get("file_path", "")),
-    "Bash": ("💻", lambda i: i.get("command", "")[:150]),
+    "Bash": ("💻", lambda i: _format_bash(i)),
     "Grep": ("🔍", lambda i: f"{i.get('pattern', '')} in {i.get('path', '.')}"),
     "Glob": ("🔍", lambda i: i.get("pattern", "")),
     "Task": ("🤖", lambda i: i.get("description", "")),
     "TaskOutput": ("🔧", lambda i: "TaskOutput"),
-    "TodoWrite": ("✅", lambda i: "todos updated"),
+    "TodoWrite": ("✅", lambda i: _format_todos(i)),
     "WebFetch": ("🌐", lambda i: i.get("url", "")),
     "WebSearch": ("🔎", lambda i: i.get("query", "")),
     "Skill": ("⚡", lambda i: f"/{i.get('skill', '')}"),
@@ -54,7 +111,7 @@ session_stats = {
     "output_tokens": 0,
     "cache_read": 0,
     "cost_usd": 0.0,
-    "api_calls": 0,
+    "tool_calls": 0,
 }
 
 
@@ -82,6 +139,9 @@ def format_mcp_tool(name: str, input_data: dict) -> str:
 
 def format_tool(name: str, input_data: dict) -> str:
     """Format a tool call for display."""
+    global session_stats
+    session_stats["tool_calls"] += 1
+
     # Check MCP tools first
     mcp_result = format_mcp_tool(name, input_data)
     if mcp_result:
@@ -123,7 +183,6 @@ def process_result(data: dict) -> str:
     session_stats["output_tokens"] += output_t
     session_stats["cache_read"] += cache_read
     session_stats["cost_usd"] += cost
-    session_stats["api_calls"] += 1
 
     if data.get("is_error"):
         error_msg = data.get("result", "Unknown error")[:100]
@@ -172,7 +231,7 @@ def process_line(line: str) -> str | None:
 
 def print_session_summary():
     """Print session statistics summary."""
-    if session_stats["api_calls"] == 0:
+    if session_stats["tool_calls"] == 0 and session_stats["input_tokens"] == 0:
         return
 
     print(f"\n{MAGENTA}{'═' * 50}{NC}")
@@ -189,7 +248,7 @@ def print_session_summary():
         )
         print(f"{MAGENTA}Cache:  {session_stats['cache_read']:,} ({cache_pct:.0f}%){NC}")
     print(f"{MAGENTA}Cost:   ${session_stats['cost_usd']:.4f}{NC}")
-    print(f"{MAGENTA}Calls:  {session_stats['api_calls']}{NC}")
+    print(f"{MAGENTA}Tools:  {session_stats['tool_calls']}{NC}")
     print(f"{MAGENTA}{'═' * 50}{NC}")
 
 
