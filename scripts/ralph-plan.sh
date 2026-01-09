@@ -90,7 +90,7 @@ for TASK_NUM in "${TASKS[@]}"; do
 
     # Run Claude interactively
     # User can interact with Claude during planning
-    if claude --model opus --dangerously-skip-permissions "/ralph-plan-task ${TASK_REF}"; then
+    if claude --model opus --dangerously-skip-permissions --settings '{"outputStyle": "explanatory"}' "/ralph-plan-task ${TASK_REF}"; then
         print_success "Planning completed for ${TASK_REF}"
         COMPLETED+=("$TASK_REF")
     else
