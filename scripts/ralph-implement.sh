@@ -156,7 +156,7 @@ for TASK_NUM in "${TASKS[@]}"; do
     # Build Claude command
     # Use stream-json to force stdout output (bypasses /dev/tty)
     # Note: stream-json requires --verbose flag
-    CLAUDE_CMD="claude -p --model opus --verbose --output-format stream-json"
+    CLAUDE_CMD="claude -p --model opus --verbose --output-format stream-json --settings '{\"outputStyle\": \"explanatory\"}'"
 
     if [[ -n "$MAX_BUDGET" ]]; then
         CLAUDE_CMD="$CLAUDE_CMD --max-budget-usd $MAX_BUDGET"
