@@ -19,8 +19,17 @@ log = get_logger("enforce_isolated_skills")
 
 # Skills that MUST be called via Task tool (isolated context)
 ISOLATED_SKILLS = {
+    # pr-review-toolkit agents (all must be isolated)
     "pr-review-toolkit:review-pr": "Task(subagent_type='pr-review-toolkit:review-pr', ...)",
+    "pr-review-toolkit:code-reviewer": "Task(subagent_type='pr-review-toolkit:code-reviewer', ...)",
+    "pr-review-toolkit:silent-failure-hunter": "Task(subagent_type='pr-review-toolkit:silent-failure-hunter', ...)",
+    "pr-review-toolkit:type-design-analyzer": "Task(subagent_type='pr-review-toolkit:type-design-analyzer', ...)",
+    "pr-review-toolkit:pr-test-analyzer": "Task(subagent_type='pr-review-toolkit:pr-test-analyzer', ...)",
+    "pr-review-toolkit:comment-analyzer": "Task(subagent_type='pr-review-toolkit:comment-analyzer', ...)",
     "review-pr": "Task(subagent_type='pr-review-toolkit:review-pr', ...)",
+    # code-simplifier
+    "code-simplifier:code-simplifier": "Task(subagent_type='code-simplifier:code-simplifier', ...)",
+    # built-in skills
     "security-review": "Task(subagent_type='general-purpose', prompt='/security-review ...')",
     "codex-review": "Task(subagent_type='general-purpose', prompt='/codex-review ...')",
 }
@@ -55,7 +64,6 @@ Use Task tool with appropriate subagent_type instead.
         log("BLOCKED", skill_name)
         return 2  # Block the tool call
 
-    log("ALLOWED", skill_name)
     return 0  # Allow other skills
 
 

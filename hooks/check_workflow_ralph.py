@@ -29,7 +29,7 @@ CHECKLIST = """
 ### Preparation
 - [ ] Задача получена и содержит `## Plan`
 - [ ] Статус задачи = work
-- [ ] TodoWrite создан для отслеживания фаз (0-12)
+- [ ] TodoWrite создан для отслеживания фаз (0-11)
 - [ ] Файлы из Scope прочитаны
 
 ### Implementation
@@ -38,20 +38,24 @@ CHECKLIST = """
 ### Testing (Initial) — ВСЕ тесты должны проходить
 - [ ] Unit tests написаны и проходят
 - [ ] API tests написаны (если есть endpoints)
-- [ ] UI tests написаны (если есть frontend)
+- [ ] UI tests написаны с data-testid (если есть frontend)
 - [ ] Edge cases покрыты тестами
 - [ ] Existing tests не сломаны
 
-### Reviews — ВСЕ замечания обработаны
-- [ ] `/pr-review-toolkit:review-pr` выполнен
-- [ ] `code-simplifier` выполнен
-- [ ] `/security-review` выполнен
-- [ ] `/codex-review` выполнен
-- [ ] Все review записаны в задачу
+### UI Review (если есть frontend)
+- [ ] Визуальный анализ через Opus + playwright выполнен
+- [ ] Проблемы UI исправлены (перекрытия, вёрстка, юзабилити)
+
+### Reviews (Phase 6) — run-reviews.sh
+- [ ] `/ralph-review-code` выполнен (5 агентов)
+- [ ] `/ralph-review-simplify` выполнен
+- [ ] `/ralph-review-security` выполнен
+- [ ] `/ralph-review-codex` выполнен
 - [ ] ВСЕ замечания исправлены ИЛИ обоснованно отклонены
 
 ### Testing (Final)
-- [ ] ВСЕ тесты проходят после исправлений
+- [ ] Связанные тесты проходят после исправлений
+- [ ] Финальная UI проверка выполнена (если frontend)
 
 ### Finalization — код должен быть чистым
 - [ ] ВСЕ ошибки linters исправлены (ruff, djlint)

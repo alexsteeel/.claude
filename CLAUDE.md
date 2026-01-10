@@ -36,6 +36,7 @@ MAX_RETRIES=5 RETRY_DELAY=60 ./scripts/ralph-implement.sh myproject 1
 |--------|------|-------------|
 | `ralph-plan.sh` | Interactive | Runs `/ralph-plan-task` for each task, allows user communication |
 | `ralph-implement.sh` | Autonomous | Runs `/ralph-implement-python-task` for each task, then `/ralph-batch-check` |
+| `run-reviews.sh` | Autonomous | Runs all review commands in isolated contexts |
 
 ### ralph-implement.sh Options
 
@@ -83,10 +84,19 @@ This ensures each task starts with a clean codebase, preventing contamination fr
 
 | Command | Description |
 |---------|-------------|
-| `/pr-review-toolkit:review-pr` | Comprehensive PR review using specialized agents (plugin) |
-| `/security-review` | Security audit of uncommitted changes (built-in) |
-| `/codex-review project#N` | Code review via Codex CLI tool |
+| `/ralph-review-code project#N` | 5 code review agents in parallel, saves to task |
+| `/ralph-review-simplify project#N` | Code simplifier, saves to task |
+| `/ralph-review-security project#N` | Security review, saves to task |
+| `/ralph-review-codex project#N` | Codex review, saves to task |
 | `/python-linters` | Run ruff and djlint on codebase |
+
+### Reviews (direct, not recommended)
+
+| Command | Description |
+|---------|-------------|
+| `/pr-review-toolkit:review-pr` | Comprehensive PR review (use Task tool for isolation) |
+| `/security-review` | Security audit (use Task tool for isolation) |
+| `/codex-review project#N` | Code review via Codex CLI (use Task tool for isolation) |
 
 ### Task Management
 
@@ -116,6 +126,7 @@ Controls `/ralph-implement-python-task` autonomous workflow:
 
 Blocks direct Skill calls for tools that must run in isolated context:
 - `pr-review-toolkit:review-pr` → must use Task tool
+- `code-simplifier:code-simplifier` → must use Task tool
 - `security-review` → must use Task tool
 - `codex-review` → must use Task tool
 
@@ -151,6 +162,8 @@ All logs are stored in `~/.claude/logs/`:
 ├── ralph-plan/               # Planning sessions
 │   ├── session_*.log         # Session summary
 │   └── {project}_{N}_*.log   # Per-task output
+├── reviews/                  # Review sessions
+│   └── {project}_{N}_{review}_*.log
 └── hooks/                    # Hook events
     ├── check_workflow.log
     ├── check_workflow_ralph.log
@@ -198,25 +211,30 @@ All workflows require comprehensive testing:
 12. Complete (report, user confirmation) ← STOP for approval
 ```
 
-### ralph-implement-python-task (0-12)
+### ralph-implement-python-task (0-11)
 
 ```
 0. Validate Task (check ## Plan exists)
-1. Update Task (status=work)
+1. Update Task (status=work, skip if already work)
 2. Read Plan Context (files from Scope)
 3. Implementation
-4. Initial Testing
-5. Code Review (pr-review-toolkit + code-simplifier)
-6. Security Review (/security-review)
-7. Codex Review
-8. Final Testing
-9. Linters
-10. Cleanup
-11. Documentation
-12. Complete (auto commit, report to task, status=done)
+4. Initial Testing (with data-testid for UI tests)
+5. UI Review (visual analysis with Opus + playwright)
+6. Reviews (run-reviews.sh — isolated contexts)
+7. Final Testing (+ final UI check)
+8. Linters
+9. Cleanup
+10. Documentation
+11. Complete (auto commit, report to task, status=done)
 ```
 
 **Key difference**: Ralph is fully autonomous - no stops, auto-commits, blocks+hold on problems.
+
+**Reviews (Phase 6)** run in isolated shell sessions via `run-reviews.sh`:
+- `/ralph-review-code` — 5 agents in parallel
+- `/ralph-review-simplify` — code-simplifier
+- `/ralph-review-security` — security review
+- `/ralph-review-codex` — Codex review
 
 ## Ralph Workflow Architecture
 
