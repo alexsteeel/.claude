@@ -146,7 +146,8 @@ for TASK_NUM in "${TASKS[@]}"; do
     if [[ -n "$(git status --porcelain 2>/dev/null)" ]]; then
         echo -e "${YELLOW}Cleaning up uncommitted changes from previous task...${NC}"
         git checkout -- . 2>/dev/null || true
-        git clean -fd 2>/dev/null || true
+        # Clean untracked files but preserve env files and local configs
+        git clean -fd -e ".env*" -e "*.local" -e "*.local.*" 2>/dev/null || true
         echo -e "${GREEN}Working directory cleaned${NC}\n"
     fi
 

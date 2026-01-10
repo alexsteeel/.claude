@@ -195,8 +195,27 @@ def process_result(data: dict) -> str:
     session_stats["cost_usd"] += cost
 
     if data.get("is_error"):
-        error_msg = data.get("result", "Unknown error")[:100]
-        return f"{RED}❌ ERROR: {error_msg}{NC}"
+        # Show more error details
+        error_msg = data.get("result", "")
+        error_code = data.get("error_code", "")
+        subtype = data.get("subtype", "")
+
+        details = []
+        if error_code:
+            details.append(f"code={error_code}")
+        if subtype:
+            details.append(f"type={subtype}")
+
+        if error_msg:
+            msg_short = error_msg[:200] + ("..." if len(error_msg) > 200 else "")
+            details.append(msg_short)
+
+        if not details:
+            # Dump all keys for debugging
+            keys = [k for k in data.keys() if k not in ("usage", "total_cost_usd")]
+            details.append(f"keys={keys}")
+
+        return f"{RED}❌ ERROR: {' | '.join(details)}{NC}"
 
     return f"{MAGENTA}📊 {input_t:,} in / {output_t:,} out | ${cost:.4f}{NC}"
 

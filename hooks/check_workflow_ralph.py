@@ -96,6 +96,33 @@ def extract_task_ref(prompt: str) -> str | None:
     return match.group(1) if match else None
 
 
+def get_all_assistant_messages(transcript_path: str) -> str:
+    """Read ALL assistant messages from transcript file (concatenated)."""
+    try:
+        path = Path(transcript_path)
+        if not path.exists():
+            return ""
+
+        all_messages = []
+        with path.open() as f:
+            for line in f:
+                try:
+                    entry = json.loads(line.strip())
+                    if entry.get("type") == "assistant":
+                        message = entry.get("message", {})
+                        content = message.get("content", [])
+                        for block in content:
+                            if isinstance(block, dict) and block.get("type") == "text":
+                                text = block.get("text", "")
+                                if text:
+                                    all_messages.append(text)
+                except json.JSONDecodeError:
+                    continue
+        return "\n".join(all_messages)
+    except Exception:
+        return ""
+
+
 def get_last_assistant_message(transcript_path: str) -> str:
     """Read the last assistant message from transcript file."""
     try:
@@ -135,24 +162,26 @@ def handle_prompt_submit(hook_input: dict):
 def handle_stop(hook_input: dict):
     """Block stop unless confirmed or on hold."""
     transcript_path = hook_input.get("transcript_path", "")
-    last_message = get_last_assistant_message(transcript_path) if transcript_path else ""
 
     task_ref = get_active_task()
     if not task_ref:
         return 0  # No active workflow, allow stop
 
-    # Check for confirmation phrase
-    if CONFIRMATION_PHRASE in last_message.lower():
+    # Search in ALL messages (not just last) for confirmation phrase
+    all_messages = get_all_assistant_messages(transcript_path) if transcript_path else ""
+    last_message = get_last_assistant_message(transcript_path) if transcript_path else ""
+
+    # Check for confirmation phrase in ANY message
+    if CONFIRMATION_PHRASE in all_messages.lower():
         clear_active_task()
         log("WORKFLOW_CONFIRMED", task_ref)
         return 0  # Allow stop
 
-    # Check for hold status (## Blocks recorded)
+    # Check for hold status in last message (## Blocks recorded)
     if "## blocks" in last_message.lower() or 'status="hold"' in last_message.lower():
         clear_active_task()
         log("WORKFLOW_HOLD", task_ref)
         return 0  # Allow stop when on hold
-
 
     # Block - confirmation not found
     reason = f"🚨 PRODUCTION WORKFLOW NOT CONFIRMED\n\n"
