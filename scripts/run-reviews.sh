@@ -87,7 +87,7 @@ for REVIEW_ENTRY in "${REVIEWS[@]}"; do
 
     set +e
     cd "$WORKING_DIR"
-    $CLAUDE_CMD "/${REVIEW_CMD} ${TASK_REF}" 2>&1 | python3 "$SCRIPT_DIR/format-output.py" | tee "$LOG_FILE"
+    $CLAUDE_CMD "/${REVIEW_CMD} ${TASK_REF}" 2>&1 | python3 "$SCRIPT_DIR/format-output.py" > "$LOG_FILE"
     EXIT_CODE=${PIPESTATUS[0]}
     set -e
 

@@ -379,23 +379,25 @@ Task(
 
 ## Phase 6: Reviews (изолированные контексты)
 
-Все review запускаются через **отдельные команды в изолированных контекстах**.
+Все review запускаются через **shell скрипт в изолированных контекстах**.
 
-### Запуск через shell скрипт
+### Запуск через Bash tool
 
-```bash
-~/.claude/scripts/run-reviews.sh {project}#{number}
+**Используй Bash tool** для запуска скрипта:
+
+```
+Bash(command="~/.claude/scripts/run-reviews.sh {project}#{number}")
 ```
 
-Скрипт последовательно вызывает:
-1. `/ralph-review-code` — 5 агентов параллельно (code-reviewer, silent-failure-hunter, type-design-analyzer, pr-test-analyzer, comment-analyzer)
+Скрипт последовательно запускает 4 отдельные сессии Claude:
+1. `/ralph-review-code` — 5 агентов параллельно
 2. `/ralph-review-simplify` — code-simplifier
 3. `/ralph-review-security` — security review
 4. `/ralph-review-codex` — Codex review
 
-Каждая команда:
-- Запускается в **изолированном контексте** (отдельная сессия Claude)
-- Сама записывает результаты в поле `review` задачи
+Каждая сессия:
+- Полностью **изолирована** (отдельный контекст)
+- Записывает результаты в поле `review` задачи
 - Возвращает краткий статус
 
 ### ⚠️ КРИТИЧЕСКАЯ ПРОВЕРКА
