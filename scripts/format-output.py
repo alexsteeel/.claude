@@ -71,21 +71,31 @@ def _format_read(i: dict) -> str:
 
 
 def _format_bash(i: dict) -> str:
-    """Format Bash tool with description or command."""
+    """Format Bash tool with description on first line, command below in italic."""
     desc = i.get("description", "")
     cmd = i.get("command", "")
     bg = i.get("run_in_background", False)
 
-    # Prefer description if available
+    ITALIC = "\033[3m"
+    RESET = "\033[0m"
+
+    # Build output: description first, then command in italic
+    lines = []
     if desc:
-        result = desc
-    else:
-        result = cmd[:120] + ("..." if len(cmd) > 120 else "")
+        if bg:
+            lines.append(f"{desc} [bg]")
+        else:
+            lines.append(desc)
 
-    if bg:
-        result += " [bg]"
+    if cmd:
+        # Indent command lines
+        for line in cmd.strip().split("\n"):
+            lines.append(f"   {ITALIC}{line}{RESET}")
 
-    return result
+    if not lines:
+        return "[no command]"
+
+    return "\n".join(lines)
 
 
 # Tool icons and formatters
