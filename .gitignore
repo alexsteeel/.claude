@@ -22,6 +22,9 @@
 !CLAUDE.md
 !README.md
 
+# And not settings example
+!settings.example.json
+
 # And not scripts
 !scripts/
 !scripts/**
