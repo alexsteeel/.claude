@@ -151,6 +151,20 @@ for TASK_NUM in "${TASKS[@]}"; do
         echo -e "${GREEN}Working directory cleaned${NC}\n"
     fi
 
+    # Clean up zombie processes from previous task (node, chrome, mcp, etc.)
+    ZOMBIES=$(ps -eo pid,stat,comm 2>/dev/null | awk '$2 ~ /Z/ {print $1}' | wc -l)
+    if [[ $ZOMBIES -gt 10 ]]; then
+        echo -e "${YELLOW}Cleaning up $ZOMBIES zombie processes...${NC}"
+        # Kill parent processes of zombies to clean them up
+        ps -eo ppid,pid,stat,comm 2>/dev/null | awk '$3 ~ /Z/ {print $1}' | sort -u | while read ppid; do
+            # Only kill if parent is not PID 1 and not our shell
+            if [[ "$ppid" != "1" && "$ppid" != "$$" ]]; then
+                kill -9 "$ppid" 2>/dev/null || true
+            fi
+        done
+        echo -e "${GREEN}Zombie cleanup attempted${NC}\n"
+    fi
+
     echo -e "Log file: ${LOG_FILE}"
     echo -e "Starting autonomous implementation...\n"
 
