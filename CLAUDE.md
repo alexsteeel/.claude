@@ -52,10 +52,21 @@ The script automatically detects and diagnoses failures:
 
 | Error Type | Detection | Action |
 |------------|-----------|--------|
+| `CONTEXT_OVERFLOW` | `Prompt is too long` | Fail (no retry) |
 | `API_TIMEOUT` | `Tokens: 0 in / 0 out` | Auto-retry with `--resume` |
 | `RATE_LIMIT` | `429` or `rate limit` | Fail (manual retry needed) |
 | `AUTH_ERROR` | `401` or `403` | Fail |
 | `UNKNOWN_ERROR` | `Unknown error` | Auto-retry with `--resume` |
+
+### Cleanup Before Each Task
+
+Before starting each task, the script cleans uncommitted changes:
+```bash
+git checkout -- .
+git clean -fd
+```
+
+This ensures each task starts with a clean codebase, preventing contamination from failed previous tasks.
 
 ## Commands
 
@@ -101,11 +112,60 @@ Controls `/ralph-implement-python-task` autonomous workflow:
 - Allows stop on hold (`## Blocks` + `status=hold`)
 - No "need feedback" bypass (autonomous mode)
 
+### enforce_isolated_skills.py
+
+Blocks direct Skill calls for tools that must run in isolated context:
+- `pr-review-toolkit:review-pr` → must use Task tool
+- `security-review` → must use Task tool
+- `codex-review` → must use Task tool
+
+These skills consume too much context when run directly, causing context overflow.
+
+### hook_utils.py
+
+Common logging utilities for all hooks:
+```python
+from hook_utils import get_logger
+log = get_logger("my_hook")
+log("EVENT", "message")
+```
+
+Writes to: `~/.claude/logs/hooks/{hook_name}.log`
+
 ### notify.sh
 
 Desktop notifications for:
 - Agent task completion
 - User attention needed
+
+## Logging
+
+All logs are stored in `~/.claude/logs/`:
+
+```
+~/.claude/logs/
+├── ralph-implement/          # Implementation sessions
+│   ├── session_*.log         # Session summary
+│   ├── {project}_{N}_*.log   # Per-task output
+│   └── batch_check_*.log     # Batch check output
+├── ralph-plan/               # Planning sessions
+│   ├── session_*.log         # Session summary
+│   └── {project}_{N}_*.log   # Per-task output
+└── hooks/                    # Hook events
+    ├── check_workflow.log
+    ├── check_workflow_ralph.log
+    └── enforce_isolated_skills.log
+```
+
+### Log Format
+
+**Scripts**: Full Claude output with timestamps and headers.
+
+**Hooks**: `[YYYY-MM-DD HH:MM:SS] EVENT: message`
+- `WORKFLOW_START` / `WORKFLOW_CONFIRMED` / `WORKFLOW_HOLD`
+- `BLOCKED` / `ALLOWED`
+- `NEED_FEEDBACK`
+- `ERROR`
 
 ## Testing Requirements
 

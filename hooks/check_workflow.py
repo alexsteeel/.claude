@@ -9,7 +9,10 @@ Blocks stop until Claude confirms completion with specific phrase.
 import json
 import sys
 from pathlib import Path
-from datetime import datetime
+
+from hook_utils import get_logger
+
+log = get_logger("check_workflow")
 
 STATE_DIR = Path("/home/claude/.claude/workflow-state")
 ACTIVE_TASK_FILE = STATE_DIR / "active_task.txt"
@@ -110,7 +113,7 @@ def handle_prompt_submit(hook_input: dict):
         task_ref = extract_task_ref(prompt)
         if task_ref:
             set_active_task(task_ref)
-            print(f"[HOOK] Workflow started for {task_ref}", file=sys.stderr)
+            log("WORKFLOW_START", task_ref)
 
 
 def handle_stop(hook_input: dict):
@@ -125,12 +128,12 @@ def handle_stop(hook_input: dict):
     # Check for confirmation phrase
     if CONFIRMATION_PHRASE in last_message.lower():
         clear_active_task()
-        print(f"\n[HOOK] ✅ Workflow confirmed complete: {task_ref}", file=sys.stderr)
+        log("WORKFLOW_CONFIRMED", task_ref)
         return 0  # Allow stop
 
     # Check for "need feedback" bypass (user interaction needed)
     if "need feedback" in last_message.lower():
-        print("[HOOK] LLM needs user feedback - allowing stop", file=sys.stderr)
+        log("NEED_FEEDBACK", task_ref)
         return 0
 
     # Check if in Plan Mode (waiting for user approval)
@@ -149,7 +152,7 @@ def handle_stop(hook_input: dict):
     response = {"decision": "block", "reason": reason}
     print(json.dumps(response))
 
-    print(f"\n[HOOK] Blocking stop - confirmation not found for {task_ref}", file=sys.stderr)
+    log("BLOCKED", f"confirmation not found for {task_ref}")
     return 2
 
 
@@ -170,7 +173,7 @@ def main():
 
         return 0
     except Exception as e:
-        Path("/tmp/workflow_hook_error.log").write_text(f"{datetime.now()}: {e}\n")
+        log("ERROR", str(e))
         return 0
 
 

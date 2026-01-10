@@ -18,7 +18,12 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
+
+# Log directory
+LOG_DIR="${HOME}/.claude/logs/ralph-plan"
+mkdir -p "$LOG_DIR"
 
 print_header() {
     echo -e "\n${BLUE}════════════════════════════════════════════════════════${NC}"
@@ -79,24 +84,71 @@ CURRENT=0
 COMPLETED=()
 FAILED=()
 
+TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+SESSION_LOG="${LOG_DIR}/session_${PROJECT}_${TIMESTAMP}.log"
+
+# Initialize session log
+{
+    echo "═══════════════════════════════════════════════════════════════"
+    echo "RALPH PLANNING SESSION"
+    echo "═══════════════════════════════════════════════════════════════"
+    echo ""
+    echo "Started:     $(date '+%Y-%m-%d %H:%M:%S')"
+    echo "Project:     ${PROJECT}"
+    echo "Tasks:       ${TASKS[*]}"
+    echo ""
+    echo "───────────────────────────────────────────────────────────────"
+    echo "TASK PLANNING LOG"
+    echo "───────────────────────────────────────────────────────────────"
+} > "$SESSION_LOG"
+
+echo -e "Logs:        ${GREEN}${LOG_DIR}/${NC}"
+echo ""
+
 for TASK_NUM in "${TASKS[@]}"; do
     CURRENT=$((CURRENT + 1))
     TASK_REF="${PROJECT}#${TASK_NUM}"
+    LOG_FILE="${LOG_DIR}/${PROJECT}_${TASK_NUM}_${TIMESTAMP}.log"
 
     print_task_header "$TASK_REF" "$CURRENT" "$TOTAL"
 
+    # Record start time
+    TASK_START=$(date '+%Y-%m-%d %H:%M:%S')
+
+    echo -e "Log file: ${CYAN}${LOG_FILE}${NC}"
     echo -e "Starting Claude in interactive mode for planning..."
     echo -e "You can communicate with Claude to clarify requirements.\n"
 
-    # Run Claude interactively
+    # Initialize task log
+    {
+        echo "═══════════════════════════════════════════════════════════════"
+        echo "Task: ${TASK_REF}"
+        echo "Started: ${TASK_START}"
+        echo "═══════════════════════════════════════════════════════════════"
+        echo ""
+    } > "$LOG_FILE"
+
+    # Run Claude interactively with logging
     # User can interact with Claude during planning
-    if claude --model opus --dangerously-skip-permissions --settings '{"outputStyle": "explanatory"}' "/ralph-plan-task ${TASK_REF}"; then
+    if claude --model opus --dangerously-skip-permissions --settings '{"outputStyle": "explanatory"}' "/ralph-plan-task ${TASK_REF}" 2>&1 | tee -a "$LOG_FILE"; then
+        TASK_END=$(date '+%Y-%m-%d %H:%M:%S')
         print_success "Planning completed for ${TASK_REF}"
         COMPLETED+=("$TASK_REF")
+        echo "[${TASK_END}] ✓ ${TASK_REF} - COMPLETED" >> "$SESSION_LOG"
     else
+        TASK_END=$(date '+%Y-%m-%d %H:%M:%S')
         print_error "Planning failed or was cancelled for ${TASK_REF}"
         FAILED+=("$TASK_REF")
+        echo "[${TASK_END}] ✗ ${TASK_REF} - FAILED/CANCELLED" >> "$SESSION_LOG"
     fi
+
+    # Add footer to task log
+    {
+        echo ""
+        echo "═══════════════════════════════════════════════════════════════"
+        echo "Finished: ${TASK_END}"
+        echo "═══════════════════════════════════════════════════════════════"
+    } >> "$LOG_FILE"
 
     # If more tasks remain, ask to continue
     if [[ $CURRENT -lt $TOTAL ]]; then
@@ -138,6 +190,37 @@ if [[ $REMAINING -gt 0 ]]; then
     done
 fi
 
+# Write final summary to session log
+{
+    echo ""
+    echo "───────────────────────────────────────────────────────────────"
+    echo "SESSION SUMMARY"
+    echo "───────────────────────────────────────────────────────────────"
+    echo ""
+    echo "Finished:    $(date '+%Y-%m-%d %H:%M:%S')"
+    echo ""
+    echo "Results:"
+    echo "  Completed: ${#COMPLETED[@]}"
+    echo "  Failed:    ${#FAILED[@]}"
+    echo ""
+    if [[ ${#COMPLETED[@]} -gt 0 ]]; then
+        echo "Completed tasks:"
+        for task in "${COMPLETED[@]}"; do
+            echo "  ✓ $task"
+        done
+    fi
+    if [[ ${#FAILED[@]} -gt 0 ]]; then
+        echo "Failed tasks:"
+        for task in "${FAILED[@]}"; do
+            echo "  ✗ $task"
+        done
+    fi
+    echo ""
+    echo "═══════════════════════════════════════════════════════════════"
+} >> "$SESSION_LOG"
+
+echo ""
+echo -e "Session log: ${GREEN}${SESSION_LOG}${NC}"
 echo ""
 echo -e "To implement planned tasks, run:"
 echo -e "  ${GREEN}./ralph-implement.sh ${PROJECT} ${TASKS[*]}${NC}"

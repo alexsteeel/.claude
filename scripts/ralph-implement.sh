@@ -141,6 +141,15 @@ for TASK_NUM in "${TASKS[@]}"; do
 
     print_task_header "$TASK_REF" "$CURRENT" "$TOTAL"
 
+    # Clean up any uncommitted changes from previous failed task
+    cd "$WORKING_DIR"
+    if [[ -n "$(git status --porcelain 2>/dev/null)" ]]; then
+        echo -e "${YELLOW}Cleaning up uncommitted changes from previous task...${NC}"
+        git checkout -- . 2>/dev/null || true
+        git clean -fd 2>/dev/null || true
+        echo -e "${GREEN}Working directory cleaned${NC}\n"
+    fi
+
     echo -e "Log file: ${LOG_FILE}"
     echo -e "Starting autonomous implementation...\n"
 
@@ -208,8 +217,15 @@ for TASK_NUM in "${TASKS[@]}"; do
 
         # Check if retryable error (API timeout)
         if [[ $EXIT_CODE -ne 0 ]]; then
+            # Context overflow - NOT retryable (retry won't help)
+            if grep -q "Prompt is too long" "$LOG_FILE" 2>/dev/null; then
+                print_error "Context overflow detected - retry won't help"
+                break
+            fi
+
+            # API timeout - retryable with --resume
             if grep -q "Tokens: 0 in / 0 out" "$LOG_FILE" 2>/dev/null || grep -q "Unknown error" "$LOG_FILE" 2>/dev/null; then
-                # Extract session ID for resume (from log)
+                # But not if it's context overflow (already checked above)
                 SESSION_ID=$(grep -o 'Session: [a-f0-9-]*' "$LOG_FILE" 2>/dev/null | tail -1 | awk '{print $2}')
                 if [[ -n "$SESSION_ID" && $ATTEMPT -lt $MAX_RETRIES ]]; then
                     RESUME_SESSION="$SESSION_ID"
@@ -244,31 +260,34 @@ for TASK_NUM in "${TASKS[@]}"; do
         echo "Exit code: ${EXIT_CODE}"
         echo "═══════════════════════════════════════════════════════════════"
     } >> "$LOG_FILE"
-    if [[ $EXIT_CODE -eq 0 ]]; then
-        # Check if task was put on hold (look for hold markers in log)
-        # In formatted logs, look for task update with hold status or Blocks mention
-        if grep -qi 'update_task.*hold' "$LOG_FILE" 2>/dev/null || grep -q '## Blocks' "$LOG_FILE" 2>/dev/null || grep -q '→ hold' "$LOG_FILE" 2>/dev/null; then
-            print_warning "Task ${TASK_REF} put ON HOLD (blocked) [${DURATION_FMT}]"
-            ON_HOLD+=("$TASK_REF")
-            echo "[${TASK_END}] ⚠ ${TASK_REF} - ON HOLD (${DURATION_FMT})" >> "$SESSION_LOG"
-        # Check if task was properly completed (confirmation phrase present)
-        elif grep -q "I confirm that all task phases are fully completed" "$LOG_FILE" 2>/dev/null; then
-            print_success "Implementation completed for ${TASK_REF} [${DURATION_FMT}]"
-            COMPLETED+=("$TASK_REF")
-            echo "[${TASK_END}] ✓ ${TASK_REF} - COMPLETED (${DURATION_FMT})" >> "$SESSION_LOG"
-        else
-            # Exit code 0 but no confirmation - task may be incomplete
-            print_warning "Task ${TASK_REF} incomplete (no confirmation phrase) [${DURATION_FMT}]"
-            ON_HOLD+=("$TASK_REF")
-            echo "[${TASK_END}] ⚠ ${TASK_REF} - INCOMPLETE (${DURATION_FMT})" >> "$SESSION_LOG"
-        fi
+    # First check for confirmation phrase - this takes priority over exit code
+    # Task may complete successfully but CLI returns error (e.g., hook issues)
+    if grep -q "I confirm that all task phases are fully completed" "$LOG_FILE" 2>/dev/null; then
+        print_success "Implementation completed for ${TASK_REF} [${DURATION_FMT}]"
+        COMPLETED+=("$TASK_REF")
+        echo "[${TASK_END}] ✓ ${TASK_REF} - COMPLETED (${DURATION_FMT})" >> "$SESSION_LOG"
+    # Check if task was put on hold
+    elif grep -qi 'update_task.*hold' "$LOG_FILE" 2>/dev/null || grep -q '## Blocks' "$LOG_FILE" 2>/dev/null || grep -q '→ hold' "$LOG_FILE" 2>/dev/null; then
+        print_warning "Task ${TASK_REF} put ON HOLD (blocked) [${DURATION_FMT}]"
+        ON_HOLD+=("$TASK_REF")
+        echo "[${TASK_END}] ⚠ ${TASK_REF} - ON HOLD (${DURATION_FMT})" >> "$SESSION_LOG"
+    elif [[ $EXIT_CODE -eq 0 ]]; then
+        # Exit code 0 but no confirmation - task may be incomplete
+        print_warning "Task ${TASK_REF} incomplete (no confirmation phrase) [${DURATION_FMT}]"
+        ON_HOLD+=("$TASK_REF")
+        echo "[${TASK_END}] ⚠ ${TASK_REF} - INCOMPLETE (${DURATION_FMT})" >> "$SESSION_LOG"
     else
         # Diagnose failure type
         FAILURE_TYPE="UNKNOWN"
         FAILURE_DETAIL=""
 
+        # Check for context overflow (Prompt is too long) - most specific first
+        if grep -q "Prompt is too long" "$LOG_FILE" 2>/dev/null; then
+            FAILURE_TYPE="CONTEXT_OVERFLOW"
+            OVERFLOW_COUNT=$(grep -c "Prompt is too long" "$LOG_FILE" 2>/dev/null || echo "0")
+            FAILURE_DETAIL="Context overflow (${OVERFLOW_COUNT}x 'Prompt is too long') - reviews need isolated context"
         # Check for API timeout (Tokens: 0 in / 0 out)
-        if grep -q "Tokens: 0 in / 0 out" "$LOG_FILE" 2>/dev/null; then
+        elif grep -q "Tokens: 0 in / 0 out" "$LOG_FILE" 2>/dev/null; then
             FAILURE_TYPE="API_TIMEOUT"
             FAILURE_DETAIL="API connection timeout or disconnect"
         # Check for rate limit

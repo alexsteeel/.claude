@@ -11,7 +11,10 @@ Differences from check_workflow.py:
 import json
 import sys
 from pathlib import Path
-from datetime import datetime
+
+from hook_utils import get_logger
+
+log = get_logger("check_workflow_ralph")
 
 STATE_DIR = Path.home() / ".claude" / "workflow-state"
 ACTIVE_TASK_FILE = STATE_DIR / "active_ralph_task.txt"
@@ -122,7 +125,7 @@ def handle_prompt_submit(hook_input: dict):
         task_ref = extract_task_ref(prompt)
         if task_ref:
             set_active_task(task_ref)
-            print(f"[RALPH HOOK] Autonomous workflow started for {task_ref}", file=sys.stderr)
+            log("WORKFLOW_START", task_ref)
 
 
 def handle_stop(hook_input: dict):
@@ -137,13 +140,13 @@ def handle_stop(hook_input: dict):
     # Check for confirmation phrase
     if CONFIRMATION_PHRASE in last_message.lower():
         clear_active_task()
-        print(f"\n[RALPH HOOK] ✅ Workflow confirmed complete: {task_ref}", file=sys.stderr)
+        log("WORKFLOW_CONFIRMED", task_ref)
         return 0  # Allow stop
 
     # Check for hold status (## Blocks recorded)
     if "## blocks" in last_message.lower() or 'status="hold"' in last_message.lower():
         clear_active_task()
-        print(f"\n[RALPH HOOK] ⚠️ Workflow on HOLD: {task_ref}", file=sys.stderr)
+        log("WORKFLOW_HOLD", task_ref)
         return 0  # Allow stop when on hold
 
 
@@ -159,7 +162,7 @@ def handle_stop(hook_input: dict):
     response = {"decision": "block", "reason": reason}
     print(json.dumps(response))
 
-    print(f"\n[RALPH HOOK] Blocking stop - confirmation not found for {task_ref}", file=sys.stderr)
+    log("BLOCKED", f"confirmation not found for {task_ref}")
     return 2
 
 
@@ -180,7 +183,7 @@ def main():
 
         return 0
     except Exception as e:
-        Path("/tmp/ralph_hook_error.log").write_text(f"{datetime.now()}: {e}\n")
+        log("ERROR", str(e))
         return 0
 
 
