@@ -34,7 +34,7 @@ Tasks stored in `~/.md-task-mcp/{project}/tasks/{NNN}-{slug}.md`:
 status: todo
 module: auth
 branch: feature/task-1-summary
-started: 2024-01-15
+started: 2024-01-15 10:30
 completed:
 depends_on: 2, 3
 
@@ -93,7 +93,7 @@ update_task(
     number=1,
     status="work",           # hold, todo, work, done, approved
     module="auth",           # area/module name
-    started="2024-01-15",
+    started="2024-01-15 10:30",
     branch="feature/task-1",
     body="Updated description",
     plan="Updated plan",
@@ -136,7 +136,7 @@ update_task(
     project="my-project",
     number=1,
     status="work",
-    started="YYYY-MM-DD",
+    started="YYYY-MM-DD HH:MM",
     branch="<current-git-branch>"
 )
 ```

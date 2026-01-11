@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Edit",
-      "Bash(gh issue view:*)"
+      "Bash(gh issue view:*)",
+      "Bash(docker exec:*)",
+      "Bash(docker ps:*)",
+      "mcp__md-task-mcp__tasks",
+      "mcp__md-task-mcp__update_task"
     ]
   }
 }

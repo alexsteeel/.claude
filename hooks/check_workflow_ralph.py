@@ -9,6 +9,7 @@ Differences from check_workflow.py:
 """
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -41,6 +42,7 @@ CHECKLIST = """
 - [ ] UI tests написаны с data-testid (если есть frontend)
 - [ ] Edge cases покрыты тестами
 - [ ] Existing tests не сломаны
+- [ ] **НЕТ skipped тестов** (skip = fail, исправь тест!)
 
 ### UI Review (если есть frontend)
 - [ ] Визуальный анализ через Opus + playwright выполнен
@@ -67,8 +69,12 @@ CHECKLIST = """
 📖 Command reference: /ralph-implement-python-task
 
 ⚠️ ЗАПРЕЩЕНО: пропускать фазы, оставлять failing tests, игнорировать замечания.
+⚠️ ЗАПРЕЩЕНО: помечать тесты как skip чтобы обойти падающие тесты!
 ⚠️ Если не можешь выполнить качественно → hold + ## Blocks.
 """
+
+# Note: @pytest.mark.skipif is ALLOWED (conditional skip for platform/version)
+# Only unconditional @pytest.mark.skip is blocked
 
 
 def get_active_task() -> str | None:
@@ -148,6 +154,48 @@ def get_last_assistant_message(transcript_path: str) -> str:
         return ""
 
 
+def check_skipped_tests_in_repo(working_dir: str | None = None) -> list[str]:
+    """Check repository for @pytest.mark.skip decorators.
+
+    Searches test files directly - much more reliable than parsing transcript.
+    Only detects unconditional @pytest.mark.skip, NOT @pytest.mark.skipif.
+    Returns list of files:line with skip decorators.
+    """
+    import subprocess
+
+    if not working_dir:
+        working_dir = Path.cwd()
+    else:
+        working_dir = Path(working_dir)
+
+    matches = []
+
+    try:
+        # Find all @pytest.mark.skip in Python test files
+        result = subprocess.run(
+            ["grep", "-r", "-n", "--include=*.py", "@pytest.mark.skip"],
+            cwd=working_dir,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            for line in result.stdout.strip().split('\n'):
+                # Skip lines with skipif (conditional skip is allowed)
+                if "skipif" in line.lower():
+                    continue
+                # Only include test files
+                if "test" in line.lower():
+                    # Format: file:line:content -> take file:line
+                    parts = line.split(':', 2)
+                    if len(parts) >= 2:
+                        matches.append(f"{parts[0]}:{parts[1]}")
+    except (subprocess.TimeoutExpired, Exception):
+        pass
+
+    return matches[:10]  # Limit to 10 matches
+
+
 def handle_prompt_submit(hook_input: dict):
     """Check if ralph workflow is starting."""
     prompt = hook_input.get("prompt", "")
@@ -162,6 +210,7 @@ def handle_prompt_submit(hook_input: dict):
 def handle_stop(hook_input: dict):
     """Block stop unless confirmed or on hold."""
     transcript_path = hook_input.get("transcript_path", "")
+    working_dir = hook_input.get("cwd", "")
 
     task_ref = get_active_task()
     if not task_ref:
@@ -173,6 +222,33 @@ def handle_stop(hook_input: dict):
 
     # Check for confirmation phrase in ANY message
     if CONFIRMATION_PHRASE in all_messages.lower():
+        # Check for skipped tests in repository - this is NOT allowed
+        skipped_tests = check_skipped_tests_in_repo(working_dir)
+        if skipped_tests:
+            skip_list = "\n".join(f"- `{m}`" for m in skipped_tests[:10])
+            reason = f"""🚨 SKIPPED TESTS FOUND IN REPOSITORY
+
+Task: {task_ref}
+
+**Файлы с @pytest.mark.skip:**
+{skip_list}
+
+⚠️ **SKIPPED = FAILED!**
+
+Пропуск тестов через `@pytest.mark.skip` ЗАПРЕЩЁН.
+Исправь падающие тесты вместо их пропуска.
+
+Разрешённые исключения:
+- Тесты, требующие внешней инфраструктуры (CI, staging)
+- Тесты с `skipif` по условию (Python version, platform)
+
+Удали skip декораторы или hold + ## Blocks с обоснованием."""
+
+            response = {"decision": "block", "reason": reason}
+            print(json.dumps(response))
+            log("BLOCKED_SKIPPED_TESTS", f"{task_ref}: {skipped_tests[:3]}")
+            return 2
+
         clear_active_task()
         log("WORKFLOW_CONFIRMED", task_ref)
         return 0  # Allow stop
@@ -184,13 +260,20 @@ def handle_stop(hook_input: dict):
         return 0  # Allow stop when on hold
 
     # Block - confirmation not found
-    reason = f"🚨 PRODUCTION WORKFLOW NOT CONFIRMED\n\n"
-    reason += f"Task: {task_ref}\n\n"
-    reason += "⚠️ Это PRODUCTION код, НЕ MVP! Все этапы ОБЯЗАТЕЛЬНЫ.\n\n"
-    reason += "To complete the workflow, verify ALL items and write:\n"
-    reason += "```\nI confirm that all task phases are fully completed.\n```\n\n"
-    reason += "If blocked, commit WIP changes, record issue in ## Blocks and set status='hold'.\n\n"
-    reason += CHECKLIST
+    reason = f"""🚨 PRODUCTION WORKFLOW NOT CONFIRMED
+
+Task: {task_ref}
+
+⚠️ Это PRODUCTION код, НЕ MVP! Все этапы ОБЯЗАТЕЛЬНЫ.
+
+To complete the workflow, verify ALL items and write:
+```
+I confirm that all task phases are fully completed.
+```
+
+If blocked, commit WIP changes, record issue in ## Blocks and set status='hold'.
+
+{CHECKLIST}"""
 
     response = {"decision": "block", "reason": reason}
     print(json.dumps(response))

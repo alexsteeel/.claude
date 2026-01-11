@@ -143,12 +143,26 @@ for TASK_NUM in "${TASKS[@]}"; do
 
     # Clean up any uncommitted changes from previous failed task
     cd "$WORKING_DIR"
-    if [[ -n "$(git status --porcelain 2>/dev/null)" ]]; then
-        echo -e "${YELLOW}Cleaning up uncommitted changes from previous task...${NC}"
+    GIT_CHANGES=$(git status --porcelain 2>/dev/null)
+    if [[ -n "$GIT_CHANGES" ]]; then
+        echo -e "${YELLOW}┌─────────────────────────────────────────────────────────${NC}"
+        echo -e "${YELLOW}│ Найдены незакоммиченные изменения от предыдущих задач${NC}"
+        echo -e "${YELLOW}├─────────────────────────────────────────────────────────${NC}"
+        # Show what will be cleaned (max 10 files)
+        echo "$GIT_CHANGES" | head -10 | while read line; do
+            echo -e "${YELLOW}│  $line${NC}"
+        done
+        TOTAL_FILES=$(echo "$GIT_CHANGES" | wc -l)
+        if [[ $TOTAL_FILES -gt 10 ]]; then
+            echo -e "${YELLOW}│  ... и ещё $((TOTAL_FILES - 10)) файлов${NC}"
+        fi
+        echo -e "${YELLOW}└─────────────────────────────────────────────────────────${NC}"
+
+        # Perform cleanup
         git checkout -- . 2>/dev/null || true
         # Clean untracked files but preserve env files and local configs
         git clean -fd -e ".env*" -e "*.local" -e "*.local.*" 2>/dev/null || true
-        echo -e "${GREEN}Working directory cleaned${NC}\n"
+        echo -e "${GREEN}✓ Очистка выполнена${NC}\n"
     fi
 
     # Clean up zombie processes from previous task (node, chrome, mcp, etc.)
@@ -238,8 +252,10 @@ for TASK_NUM in "${TASKS[@]}"; do
                 break
             fi
 
-            # API timeout - retryable with --resume
-            if grep -q "Tokens: 0 in / 0 out" "$LOG_FILE" 2>/dev/null || grep -q "Unknown error" "$LOG_FILE" 2>/dev/null; then
+            # API timeout or execution error - retryable with --resume
+            if grep -q "Tokens: 0 in / 0 out" "$LOG_FILE" 2>/dev/null || \
+               grep -q "Unknown error" "$LOG_FILE" 2>/dev/null || \
+               grep -q "type=error_during_execution" "$LOG_FILE" 2>/dev/null; then
                 # But not if it's context overflow (already checked above)
                 SESSION_ID=$(grep -o 'Session: [a-f0-9-]*' "$LOG_FILE" 2>/dev/null | tail -1 | awk '{print $2}')
                 if [[ -n "$SESSION_ID" && $ATTEMPT -lt $MAX_RETRIES ]]; then
@@ -301,12 +317,16 @@ for TASK_NUM in "${TASKS[@]}"; do
             FAILURE_TYPE="CONTEXT_OVERFLOW"
             OVERFLOW_COUNT=$(grep -c "Prompt is too long" "$LOG_FILE" 2>/dev/null || echo "0")
             FAILURE_DETAIL="Context overflow (${OVERFLOW_COUNT}x 'Prompt is too long') - reviews need isolated context"
+        # Check for error_during_execution (Claude API error)
+        elif grep -q "type=error_during_execution" "$LOG_FILE" 2>/dev/null; then
+            FAILURE_TYPE="EXECUTION_ERROR"
+            FAILURE_DETAIL="Claude API error during execution"
         # Check for API timeout (Tokens: 0 in / 0 out)
         elif grep -q "Tokens: 0 in / 0 out" "$LOG_FILE" 2>/dev/null; then
             FAILURE_TYPE="API_TIMEOUT"
             FAILURE_DETAIL="API connection timeout or disconnect"
-        # Check for rate limit
-        elif grep -qi "rate.limit\|too.many.requests\|429" "$LOG_FILE" 2>/dev/null; then
+        # Check for rate limit (more specific pattern to avoid false positives)
+        elif grep -qE "rate[_-]?limit|too[_. ]many[_. ]requests|HTTP 429|error.*429" "$LOG_FILE" 2>/dev/null; then
             FAILURE_TYPE="RATE_LIMIT"
             FAILURE_DETAIL="API rate limit exceeded"
         # Check for authentication error

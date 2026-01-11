@@ -1,6 +1,6 @@
 # Claude Code Configuration
 
-Конфигурация Claude Code: команды, агенты, хуки и скрипты для автоматизации разработки.
+Конфигурация Claude Code: команды, хуки и скрипты для автоматизации разработки.
 
 ## Быстрый старт
 
@@ -18,9 +18,9 @@ WORKING_DIR=/path/to/project ~/.claude/scripts/ralph-implement.sh myproject 1 2 
 ```
 ~/.claude/
 ├── commands/           # Slash-команды (/command-name)
-├── agents/             # Кастомные агенты для Task tool
 ├── hooks/              # Хуки автоматизации workflow
 ├── scripts/            # Shell-скрипты для запуска loops
+├── ARCHITECTURE.md     # Диаграммы работы скриптов
 ├── CLAUDE.md           # Техническая документация для Claude
 └── README.md           # Этот файл
 ```
@@ -138,20 +138,6 @@ WORKING_DIR=/workspaces/myapp ~/.claude/scripts/ralph-implement.sh myproject 5 6
 - Отслеживает создание коммита
 - Разрешает остановку только при завершении или `hold`
 
-## Агенты
-
-Кастомные агенты для `Task(subagent_type="...")`:
-
-| Агент | Специализация |
-|-------|---------------|
-| `software-engineer` | API, бизнес-логика, БД, оптимизация |
-| `qa-engineer` | Тесты: unit, integration, e2e |
-| `technical-writer` | Документация |
-| `technical-lead` | Планирование задач |
-| `senior-devops-engineer` | CI/CD, контейнеры, инфраструктура |
-| `analytics-engineer` | Анализ требований, метрики |
-| `code-reviewer` | Автоматическое ревью через Codex |
-
 ## Docker-контейнеры
 
 Конфигурация синхронизируется в:
@@ -165,29 +151,3 @@ WORKING_DIR=/workspaces/myapp ~/.claude/scripts/ralph-implement.sh myproject 5 6
 docker cp ~/.claude/commands/file.md container:/home/claude/.claude/commands/
 docker exec --user root container chown claude:claude /home/claude/.claude/commands/file.md
 ```
-
-## Разработка
-
-### Добавление новой команды
-
-1. Создать файл в `commands/name.md`
-2. Добавить frontmatter с `name`, `description`, `arguments`
-3. Закоммитить
-4. Скопировать в контейнеры
-
-### Добавление нового агента
-
-1. Создать файл в `agents/name.md`
-2. Добавить frontmatter с `name`, `description`, `model`, `color`
-3. Использовать через `Task(subagent_type="name")`
-
-## Git
-
-```bash
-cd ~/.claude
-git status
-git log --oneline
-git diff
-```
-
-Отслеживаются только: `commands/`, `agents/`, `hooks/`, `scripts/`, `CLAUDE.md`, `README.md`

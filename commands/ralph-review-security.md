@@ -9,37 +9,30 @@ arguments:
 
 Task ref: `$ARGUMENTS`
 
-## Получи контекст задачи
+**ВАЖНО:** Это standalone review команда, НЕ полный workflow. Не требует confirmation phrase.
 
-```python
-task = get_task(project, number)
-context = f"""
-Контекст задачи:
-- Описание: {task.description}
-- План: {task.plan}
-"""
+## 1. Получи задачу
+
+Используй `mcp__md-task-mcp__tasks(project, number)` чтобы получить task.
+
+## 2. Запусти security review
+
+Выполни `/security-review` на uncommitted changes в репозитории.
+
+## 3. ОБЯЗАТЕЛЬНО сохрани в review поле
+
 ```
-
-## Запусти агент
-
-```
-Task(subagent_type="general-purpose",
-     prompt=context + "\n\nВыполни /security-review", model="opus")
-```
-
-## Добавь к существующему review
-
-```python
-existing = task.get("review", "")
-
-update_task(
-    project, number,
-    review=existing + "\n\n### Security Review\n" + results
+mcp__md-task-mcp__update_task(
+    project=project,
+    number=number,
+    review=existing_review + "\n\n---\n\n### Security Review\n\n" + results
 )
 ```
 
-## Верни статус
+**НЕ записывай в blocks!** Только в `review` поле.
+
+## 4. Верни статус
 
 ```
-✅ Security Review: {project}#{number} — N уязвимостей
+✅ Security Review записан: {project}#{number} — N уязвимостей
 ```

@@ -299,6 +299,106 @@ All workflows require comprehensive testing:
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
+## Reviews Isolation (run-reviews.sh)
+
+Reviews run in isolated Claude sessions to prevent context overflow. The workflow state must be suspended for child sessions.
+
+```mermaid
+sequenceDiagram
+    participant P as Parent Session<br>/ralph-implement-python-task
+    participant S as run-reviews.sh
+    participant F as workflow-state/<br>active_ralph_task.txt
+    participant C as Child Sessions
+    participant H as check_workflow_ralph.py
+
+    P->>S: Phase 6: call run-reviews.sh
+    S->>F: mv active_ralph_task.txt → .bak
+    Note over F: State suspended
+
+    loop For each review
+        S->>C: claude "/ralph-review-* project#N"
+        C->>H: Stop event
+        H->>F: exists?
+        F-->>H: NO (renamed to .bak)
+        H-->>C: return 0 (allow)
+        C->>C: update_task(review=...)
+        C-->>S: exit 0
+    end
+
+    S->>F: mv .bak → active_ralph_task.txt
+    Note over F: State restored (trap EXIT)
+    S-->>P: return with summary table
+    P->>P: Continue Phase 7...
+```
+
+### Hook State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> CheckEvent
+
+    state CheckEvent {
+        [*] --> UserPromptSubmit
+        [*] --> Stop
+    }
+
+    state UserPromptSubmit {
+        [*] --> CheckPrompt
+        CheckPrompt --> SetActive: contains "ralph-implement-python-task"
+        CheckPrompt --> Pass: otherwise
+        SetActive --> [*]: write active_ralph_task.txt
+        Pass --> [*]
+    }
+
+    state Stop {
+        [*] --> CheckFile
+        CheckFile --> Allow1: file not exists
+        CheckFile --> CheckConfirmation: file exists
+
+        CheckConfirmation --> CheckSkipped: confirmation found
+        CheckConfirmation --> CheckHold: confirmation not found
+
+        CheckSkipped --> Allow2: no @pytest.mark.skip
+        CheckSkipped --> Block1: skip found in repo
+
+        CheckHold --> Allow3: "## Blocks" or status=hold
+        CheckHold --> Block2: otherwise
+
+        Allow1 --> [*]: return 0
+        Allow2 --> [*]: clear_active_task + return 0
+        Allow3 --> [*]: clear_active_task + return 0
+        Block1 --> [*]: return 2 + show files
+        Block2 --> [*]: return 2 + show checklist
+    }
+```
+
+### run-reviews.sh Output
+
+```
+════════════════════════════════════════════════════════════════════════════════
+  SUMMARY
+════════════════════════════════════════════════════════════════════════════════
+🎉 All 4/4 reviews completed successfully!
+
+┌────────────────────────┬──────────────┬───────┬─────────────┐
+│         Review         │    Status    │ Time  │  Log Size   │
+├────────────────────────┼──────────────┼───────┼─────────────┤
+│ Code Review (5 agents) │ ✅ Completed │ 03:41 │      9 KB   │
+├────────────────────────┼──────────────┼───────┼─────────────┤
+│ Code Simplifier        │ ✅ Completed │ 01:56 │      2 KB   │
+├────────────────────────┼──────────────┼───────┼─────────────┤
+│ Security Review        │ ✅ Completed │ 01:44 │      2 KB   │
+├────────────────────────┼──────────────┼───────┼─────────────┤
+│ Codex Review           │ ✅ Completed │ 03:49 │      4 KB   │
+└────────────────────────┴──────────────┴───────┴─────────────┘
+
+Log files:
+  Code Review (5 agents): ~/.claude/logs/reviews/project_N_ralph-review-code_*.log
+  Code Simplifier: ~/.claude/logs/reviews/project_N_ralph-review-simplify_*.log
+  Security Review: ~/.claude/logs/reviews/project_N_ralph-review-security_*.log
+  Codex Review: ~/.claude/logs/reviews/project_N_ralph-review-codex_*.log
+```
+
 ## Task Statuses (md-task-mcp)
 
 | Status | Meaning |

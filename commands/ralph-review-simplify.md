@@ -9,37 +9,33 @@ arguments:
 
 Task ref: `$ARGUMENTS`
 
-## Получи контекст задачи
+**ВАЖНО:** Это standalone review команда, НЕ полный workflow. Не требует confirmation phrase.
 
-```python
-task = get_task(project, number)
-context = f"""
-Контекст задачи:
-- Описание: {task.description}
-- План: {task.plan}
-"""
-```
+## 1. Получи задачу
 
-## Запусти агент
+Используй `mcp__md-task-mcp__tasks(project, number)` чтобы получить task.
+
+## 2. Запусти агент
 
 ```
 Task(subagent_type="code-simplifier:code-simplifier",
-     prompt=context, model="opus")
+     prompt=task_context, model="opus")
 ```
 
-## Добавь к существующему review
+## 3. ОБЯЗАТЕЛЬНО сохрани в review поле
 
-```python
-existing = task.get("review", "")
-
-update_task(
-    project, number,
-    review=existing + "\n\n### Code Simplifier\n" + results
+```
+mcp__md-task-mcp__update_task(
+    project=project,
+    number=number,
+    review=existing_review + "\n\n---\n\n### Code Simplifier\n\n" + results
 )
 ```
 
-## Верни статус
+**НЕ записывай в blocks!** Только в `review` поле.
+
+## 4. Верни статус
 
 ```
-✅ Code Simplifier: {project}#{number} — N замечаний
+✅ Code Simplifier записан: {project}#{number} — N замечаний
 ```

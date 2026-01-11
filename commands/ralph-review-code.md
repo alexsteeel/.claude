@@ -9,51 +9,38 @@ arguments:
 
 Task ref: `$ARGUMENTS`
 
-## Получи контекст задачи
+**ВАЖНО:** Это standalone review команда, НЕ полный workflow. Не требует confirmation phrase.
 
-```python
-task = get_task(project, number)
-context = f"""
-Контекст задачи:
-- Описание: {task.description}
-- План: {task.plan}
-"""
+## 1. Получи задачу
+
+Используй `mcp__md-task-mcp__tasks(project, number)` чтобы получить task.
+
+## 2. Запусти 5 агентов ПАРАЛЛЕЛЬНО
+
+Все 5 Task tool calls в **ОДНОМ сообщении**, передай контекст задачи:
+
+- `pr-review-toolkit:code-reviewer`
+- `pr-review-toolkit:silent-failure-hunter`
+- `pr-review-toolkit:type-design-analyzer`
+- `pr-review-toolkit:pr-test-analyzer`
+- `pr-review-toolkit:comment-analyzer`
+
+## 3. ОБЯЗАТЕЛЬНО сохрани в review поле
+
+После получения результатов от всех агентов, **ОБЯЗАТЕЛЬНО** вызови:
+
 ```
-
-## Запусти 5 агентов ПАРАЛЛЕЛЬНО
-
-Все 5 Task в **ОДНОМ сообщении**:
-
-```
-Task(subagent_type="pr-review-toolkit:code-reviewer",
-     prompt=context, model="opus")
-
-Task(subagent_type="pr-review-toolkit:silent-failure-hunter",
-     prompt=context, model="opus")
-
-Task(subagent_type="pr-review-toolkit:type-design-analyzer",
-     prompt=context, model="opus")
-
-Task(subagent_type="pr-review-toolkit:pr-test-analyzer",
-     prompt=context, model="opus")
-
-Task(subagent_type="pr-review-toolkit:comment-analyzer",
-     prompt=context, model="opus")
-```
-
-## Добавь к существующему review
-
-```python
-existing = task.get("review", "")
-
-update_task(
-    project, number,
-    review=existing + "\n\n### Code Review (5 agents)\n" + results
+mcp__md-task-mcp__update_task(
+    project=project,
+    number=number,
+    review=existing_review + "\n\n---\n\n### Code Review (5 agents)\n\n" + formatted_results
 )
 ```
 
-## Верни статус
+**НЕ записывай в blocks!** Только в `review` поле.
+
+## 4. Верни статус
 
 ```
-✅ Code Review: {project}#{number} — N замечаний
+✅ Code Review записан: {project}#{number} — N замечаний
 ```
