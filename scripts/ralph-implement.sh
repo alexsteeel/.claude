@@ -5,6 +5,7 @@
 #
 # Usage: ./ralph-implement.sh <project> <task_numbers...>
 # Example: ./ralph-implement.sh myproject 1 2 3
+# Example: ./ralph-implement.sh myproject 1-4 6 8-10  (expands to 1 2 3 4 6 8 9 10)
 #
 # ⚠️  WARNING: This script uses --dangerously-skip-permissions flag!
 #     Claude will execute commands without asking for confirmation.
@@ -53,12 +54,39 @@ print_warning() {
     echo -e "${YELLOW}⚠ $1${NC}"
 }
 
+# Expand ranges like "1-4 6 8-10" to "1 2 3 4 6 8 9 10"
+expand_ranges() {
+    local result=()
+    for arg in "$@"; do
+        if [[ "$arg" =~ ^([0-9]+)-([0-9]+)$ ]]; then
+            local start="${BASH_REMATCH[1]}"
+            local end="${BASH_REMATCH[2]}"
+            if [[ $start -le $end ]]; then
+                for ((i=start; i<=end; i++)); do
+                    result+=("$i")
+                done
+            else
+                # Reverse range (e.g., 10-8 → 10 9 8)
+                for ((i=start; i>=end; i--)); do
+                    result+=("$i")
+                done
+            fi
+        else
+            result+=("$arg")
+        fi
+    done
+    echo "${result[@]}"
+}
+
 usage() {
     echo "Usage: $0 <project> <task_numbers...>"
     echo ""
     echo "Arguments:"
     echo "  project        Project name (e.g., myproject)"
-    echo "  task_numbers   One or more task numbers (e.g., 1 2 3)"
+    echo "  task_numbers   One or more task numbers or ranges"
+    echo ""
+    echo "Ranges:"
+    echo "  N-M            Expands to N, N+1, ..., M (e.g., 1-4 → 1 2 3 4)"
     echo ""
     echo "Options (via environment variables):"
     echo "  WORKING_DIR    Working directory for Claude (default: current directory)"
@@ -66,9 +94,10 @@ usage() {
     echo "  MAX_RETRIES    Max retry attempts on API timeout (default: 3)"
     echo "  RETRY_DELAY    Delay in seconds between retries (default: 30)"
     echo ""
-    echo "Example:"
+    echo "Examples:"
     echo "  $0 myproject 1 2 3"
-    echo "  WORKING_DIR=/path/to/project MAX_BUDGET=5 $0 myproject 1 2 3"
+    echo "  $0 myproject 1-4 6 8-10              # expands to 1 2 3 4 6 8 9 10"
+    echo "  WORKING_DIR=/path/to/project $0 myproject 1-5"
     echo ""
     echo "This script runs /ralph-implement-python-task in AUTONOMOUS mode."
     echo "Tasks must have a ## Plan section (run ralph-plan.sh first)."
@@ -84,7 +113,9 @@ fi
 
 PROJECT="$1"
 shift
-TASKS=("$@")
+# Expand ranges (e.g., "1-4 6" → "1 2 3 4 6")
+EXPANDED=$(expand_ranges "$@")
+read -ra TASKS <<< "$EXPANDED"
 
 # Optional settings
 WORKING_DIR="${WORKING_DIR:-$(pwd)}"

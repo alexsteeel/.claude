@@ -20,17 +20,29 @@ Shell scripts for running Ralph loops manually:
 # Planning (interactive, with user feedback)
 ./scripts/ralph-plan.sh <project> <task_numbers...>
 ./scripts/ralph-plan.sh myproject 1 2 3
+./scripts/ralph-plan.sh myproject 1-4 6 8-10    # ranges supported!
 
 # Implementation (autonomous, no interaction)
 ./scripts/ralph-implement.sh <project> <task_numbers...>
 ./scripts/ralph-implement.sh myproject 1 2 3
+./scripts/ralph-implement.sh myproject 1-4 6 8-10    # ranges supported!
 
 # With options
-WORKING_DIR=/path/to/project MAX_BUDGET=5 ./scripts/ralph-implement.sh myproject 1
+WORKING_DIR=/path/to/project MAX_BUDGET=5 ./scripts/ralph-implement.sh myproject 1-5
 
 # With retry settings
 MAX_RETRIES=5 RETRY_DELAY=60 ./scripts/ralph-implement.sh myproject 1
 ```
+
+### Task Number Ranges
+
+Both scripts support range syntax for task numbers:
+
+| Syntax | Expands to |
+|--------|------------|
+| `1-4` | `1 2 3 4` |
+| `1-4 6 8-10` | `1 2 3 4 6 8 9 10` |
+| `5-3` | `5 4 3` (reverse) |
 
 | Script | Mode | Description |
 |--------|------|-------------|

@@ -5,6 +5,7 @@
 #
 # Usage: ./ralph-plan.sh <project> <task_numbers...>
 # Example: ./ralph-plan.sh myproject 1 2 3
+# Example: ./ralph-plan.sh myproject 1-4 6 8-10  (expands to 1 2 3 4 6 8 9 10)
 #
 # ⚠️  WARNING: This script uses --dangerously-skip-permissions flag!
 #     Claude will execute commands without asking for confirmation.
@@ -48,15 +49,43 @@ print_error() {
     echo -e "\n${RED}✗ $1${NC}"
 }
 
+# Expand ranges like "1-4 6 8-10" to "1 2 3 4 6 8 9 10"
+expand_ranges() {
+    local result=()
+    for arg in "$@"; do
+        if [[ "$arg" =~ ^([0-9]+)-([0-9]+)$ ]]; then
+            local start="${BASH_REMATCH[1]}"
+            local end="${BASH_REMATCH[2]}"
+            if [[ $start -le $end ]]; then
+                for ((i=start; i<=end; i++)); do
+                    result+=("$i")
+                done
+            else
+                # Reverse range (e.g., 10-8 → 10 9 8)
+                for ((i=start; i>=end; i--)); do
+                    result+=("$i")
+                done
+            fi
+        else
+            result+=("$arg")
+        fi
+    done
+    echo "${result[@]}"
+}
+
 usage() {
     echo "Usage: $0 <project> <task_numbers...>"
     echo ""
     echo "Arguments:"
     echo "  project        Project name (e.g., myproject)"
-    echo "  task_numbers   One or more task numbers (e.g., 1 2 3)"
+    echo "  task_numbers   One or more task numbers or ranges"
     echo ""
-    echo "Example:"
+    echo "Ranges:"
+    echo "  N-M            Expands to N, N+1, ..., M (e.g., 1-4 → 1 2 3 4)"
+    echo ""
+    echo "Examples:"
     echo "  $0 myproject 1 2 3"
+    echo "  $0 myproject 1-4 6 8-10    # expands to 1 2 3 4 6 8 9 10"
     echo ""
     echo "This script runs /ralph-plan-task for each task in INTERACTIVE mode."
     echo "You can communicate with Claude during planning."
@@ -70,7 +99,9 @@ fi
 
 PROJECT="$1"
 shift
-TASKS=("$@")
+# Expand ranges (e.g., "1-4 6" → "1 2 3 4 6")
+EXPANDED=$(expand_ranges "$@")
+read -ra TASKS <<< "$EXPANDED"
 
 print_header
 
