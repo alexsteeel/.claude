@@ -246,6 +246,13 @@ for TASK_NUM in "${TASKS[@]}"; do
 
         # Check if retryable error (API timeout)
         if [[ $EXIT_CODE -ne 0 ]]; then
+            # Task completed successfully despite error exit code
+            # (e.g., MCP shutdown errors, Playwright cleanup after task done)
+            if grep -q "I confirm that all task phases are fully completed" "$LOG_FILE" 2>/dev/null; then
+                print_warning "Task completed but CLI reported error (ignoring)"
+                break
+            fi
+
             # Context overflow - NOT retryable (retry won't help)
             if grep -q "Prompt is too long" "$LOG_FILE" 2>/dev/null; then
                 print_error "Context overflow detected - retry won't help"

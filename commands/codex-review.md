@@ -57,8 +57,18 @@ codex review \
 ## Твоя задача
 
 1. Получи детали задачи через MCP md-task-mcp: tasks(project, number)
-2. Проанализируй ТОЛЬКО незакоммиченные изменения (git diff, git status) на соответствие ТЗ
-3. ДОБАВЬ результаты к существующему Review: update_task(project, number, review=existing_review + new_review)
+2. Прочитай CLAUDE.md в директории тестов для получения URL и credentials тестового сервера
+3. Проанализируй незакоммиченные изменения (git diff, git status) на соответствие ТЗ
+4. Если есть frontend изменения — ОБЯЗАТЕЛЬНО проверь UI через playwright MCP
+5. ДОБАВЬ результаты к существующему Review: update_task(project, number, review=existing_review + new_review)
+
+## UI Verification (ОБЯЗАТЕЛЬНО для frontend)
+
+Если изменения затрагивают templates/static/UI:
+1. Найди и прочитай CLAUDE.md в директории тестов затронутого сервиса для URL и credentials
+2. Используй playwright MCP: browser_navigate → browser_screenshot
+3. Проверь что UI отображается корректно
+4. Добавь результат проверки в Review
 
 ## Что проверять
 
@@ -67,6 +77,39 @@ codex review \
 3. **Логика**: Ошибки в бизнес-логике, edge cases, race conditions
 4. **Тесты**: Достаточность покрытия, корректность assertions, edge cases в тестах
 5. **Code Quality**: Naming, DRY, SOLID, error handling
+6. **UI** (если frontend): Визуальная проверка через playwright MCP
+6. **UI Verification** (ОБЯЗАТЕЛЬНО для frontend изменений): Проверить через playwright MCP
+
+## UI Verification через Playwright MCP (ОБЯЗАТЕЛЬНО)
+
+Если задача затрагивает frontend (templates, static, UI), **ОБЯЗАТЕЛЬНО** выполни визуальную проверку:
+
+### Получение данных для подключения
+
+**СНАЧАЛА прочитай CLAUDE.md** в директории тестов для получения:
+- URL тестового сервера (например `http://docker:38080` или `http://localhost:38080`)
+- Credentials для авторизации (ADMIN_USERNAME, ADMIN_PASSWORD)
+- Порты сервисов
+
+Найди CLAUDE.md в директории тестов затронутого сервиса. Пример данных:
+\`\`\`
+| Devcontainer | http://docker:<port> |
+| Host machine | http://localhost:<port> |
+Credentials: ADMIN_USERNAME, ADMIN_PASSWORD
+\`\`\`
+
+### Использование Playwright MCP
+
+1. **browser_navigate** — перейти на страницу с изменениями
+2. **browser_screenshot** — сделать скриншот для визуальной проверки
+3. **browser_click/browser_fill** — проверить интерактивные элементы если нужно
+
+### Что проверять в UI
+
+- Элементы отображаются корректно
+- Нет визуальных дефектов (перекрытия, обрезанный текст)
+- Данные отображаются правильно
+- Интерактивные элементы работают
 
 ## Формат замечаний
 
