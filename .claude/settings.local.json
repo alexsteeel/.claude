@@ -6,7 +6,12 @@
       "Bash(docker exec:*)",
       "Bash(docker ps:*)",
       "mcp__md-task-mcp__tasks",
-      "mcp__md-task-mcp__update_task"
+      "mcp__md-task-mcp__update_task",
+      "mcp__md-task-mcp__create_task",
+      "Bash(docker cp:*)",
+      "WebSearch",
+      "Bash(gh search code:*)",
+      "Bash(gh search:*)"
     ]
   }
 }

@@ -58,7 +58,7 @@ codex review \
 
 1. Получи детали задачи через MCP md-task-mcp: tasks(project, number)
 2. Проанализируй ТОЛЬКО незакоммиченные изменения (git diff, git status) на соответствие ТЗ
-3. Запиши результаты в раздел Review задачи через update_task(project, number, review=...)
+3. ДОБАВЬ результаты к существующему Review: update_task(project, number, review=existing_review + new_review)
 
 ## Что проверять
 
@@ -105,7 +105,7 @@ codex review \
 ## Важно
 
 - НЕ ИЗМЕНЯЙ КОД — только анализируй
-- Результаты пиши в Review секцию задачи через md-task-mcp update_task
+- Результаты ДОБАВЛЯЙ к существующему Review (append, не replace)
 - Если нет замечаний — напиши 'NO ISSUES FOUND'
 " 2>&1 > "$REVIEW_DIR/codex-output.log"
 

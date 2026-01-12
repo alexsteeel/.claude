@@ -194,11 +194,12 @@ def process_result(data: dict) -> str:
     session_stats["cache_read"] += cache_read
     session_stats["cost_usd"] += cost
 
-    if data.get("is_error"):
-        # Show more error details
+    if data.get("is_error") or data.get("subtype") == "error_during_execution":
+        # Show error details
         error_msg = data.get("result", "")
         error_code = data.get("error_code", "")
         subtype = data.get("subtype", "")
+        errors = data.get("errors", [])  # Array of error messages
 
         details = []
         if error_code:
@@ -206,14 +207,21 @@ def process_result(data: dict) -> str:
         if subtype:
             details.append(f"type={subtype}")
 
+        # Show errors array (primary source of error details)
+        if errors:
+            errors_str = "; ".join(str(e) for e in errors[:3])  # First 3 errors
+            if len(errors) > 3:
+                errors_str += f" (+{len(errors)-3} more)"
+            details.append(errors_str)
+
         if error_msg:
             msg_short = error_msg[:200] + ("..." if len(error_msg) > 200 else "")
             details.append(msg_short)
 
         if not details:
-            # Dump all keys for debugging
-            keys = [k for k in data.keys() if k not in ("usage", "total_cost_usd")]
-            details.append(f"keys={keys}")
+            # Fallback: show available keys for debugging
+            error_keys = [k for k in data.keys() if k not in ("usage", "total_cost_usd", "type", "modelUsage")]
+            details.append(f"keys={error_keys}")
 
         return f"{RED}❌ ERROR: {' | '.join(details)}{NC}"
 
