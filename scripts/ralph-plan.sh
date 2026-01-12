@@ -159,9 +159,15 @@ for TASK_NUM in "${TASKS[@]}"; do
         echo ""
     } > "$LOG_FILE"
 
-    # Run Claude interactively with logging
-    # User can interact with Claude during planning
-    if claude --model opus --dangerously-skip-permissions --settings '{"outputStyle": "explanatory"}' "/ralph-plan-task ${TASK_REF}" 2>&1 | tee -a "$LOG_FILE"; then
+    # Run Claude interactively (no pipe - Claude writes directly to tty)
+    #
+    # ⚠️  WARNING: DO NOT add "| tee" or any pipe here!
+    # Claude CLI in interactive mode writes directly to /dev/tty, bypassing stdout.
+    # Adding a pipe (e.g., "2>&1 | tee -a $LOG_FILE") will block tty output
+    # and make the terminal appear frozen while Claude runs silently.
+    # Log file only contains header/footer timestamps, not Claude conversation.
+    #
+    if claude --model opus --dangerously-skip-permissions --settings '{"outputStyle": "explanatory"}' "/ralph-plan-task ${TASK_REF}"; then
         TASK_END=$(date '+%Y-%m-%d %H:%M:%S')
         print_success "Planning completed for ${TASK_REF}"
         COMPLETED+=("$TASK_REF")
