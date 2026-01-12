@@ -11,15 +11,22 @@ Task ref: `$ARGUMENTS`
 
 **ВАЖНО:** Это standalone review команда, НЕ полный workflow. Не требует confirmation phrase.
 
-## Запусти Codex review
+## Запусти Codex review через Task (изолированный контекст)
 
-Выполни `/codex-review {project}#{number}` для проверки кода через Codex CLI.
+Используй Task tool для запуска codex-review в изолированном контексте:
+
+```
+Task(
+    subagent_type="general-purpose",
+    prompt="/codex-review $ARGUMENTS"
+)
+```
 
 **Codex сам сохраняет результаты в review поле задачи** — не дублируй!
 
 ## Верни статус
 
-После завершения `/codex-review`:
+После завершения Task:
 
 ```
 ✅ Codex Review: {project}#{number} — см. review поле задачи
