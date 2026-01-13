@@ -31,7 +31,7 @@ ISOLATED_SKILLS = {
     "code-simplifier:code-simplifier": "Task(subagent_type='code-simplifier:code-simplifier', ...)",
     # built-in skills
     "security-review": "Task(subagent_type='general-purpose', prompt='/security-review ...')",
-    "codex-review": "Task(subagent_type='general-purpose', prompt='/codex-review ...')",
+    # NOTE: codex-review removed - it's called via ralph-review-codex which already uses Task
 }
 
 

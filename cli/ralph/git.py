@@ -1,10 +1,13 @@
 """Git operations using GitPython."""
 
+import logging
 from pathlib import Path
 from typing import Optional
 
 from git import Repo
 from git.exc import GitCommandError, InvalidGitRepositoryError
+
+logger = logging.getLogger(__name__)
 
 
 def get_repo(working_dir: Path) -> Optional[Repo]:
@@ -40,14 +43,14 @@ def cleanup_working_dir(working_dir: Path) -> list[str]:
     # Reset tracked files
     try:
         repo.git.checkout("--", ".")
-    except GitCommandError:
-        pass
+    except GitCommandError as e:
+        logger.debug("git checkout failed: %s", e)
 
     # Remove untracked files
     try:
         repo.git.clean("-fd")
-    except GitCommandError:
-        pass
+    except GitCommandError as e:
+        logger.debug("git clean failed: %s", e)
 
     return cleaned
 
@@ -110,7 +113,8 @@ def commit_wip(working_dir: Path, task_ref: str, message: str) -> Optional[str]:
 
         # Return short hash
         return repo.head.commit.hexsha[:7]
-    except GitCommandError:
+    except GitCommandError as e:
+        logger.debug("commit_wip failed: %s", e)
         return None
 
 
@@ -136,7 +140,8 @@ def create_branch(working_dir: Path, branch_name: str) -> bool:
     try:
         repo.git.checkout("-b", branch_name)
         return True
-    except GitCommandError:
+    except GitCommandError as e:
+        logger.debug("create_branch failed: %s", e)
         return False
 
 
@@ -149,5 +154,6 @@ def switch_branch(working_dir: Path, branch_name: str) -> bool:
     try:
         repo.git.checkout(branch_name)
         return True
-    except GitCommandError:
+    except GitCommandError as e:
+        logger.debug("switch_branch failed: %s", e)
         return False

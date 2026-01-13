@@ -3,7 +3,7 @@
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 
 from rich.console import Console
 
@@ -17,7 +17,7 @@ console = Console()
 
 def run_plan(
     project: str,
-    task_args: List[str],
+    task_args: list[str],
     working_dir: Optional[Path] = None,
 ) -> int:
     """Run interactive planning for tasks."""

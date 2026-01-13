@@ -1,7 +1,7 @@
 """CLI definition with typer."""
 
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 
 import typer
 
@@ -14,7 +14,7 @@ app = typer.Typer(
 @app.command()
 def plan(
     project: str = typer.Argument(..., help="Project name"),
-    tasks: List[str] = typer.Argument(..., help="Task numbers or ranges (e.g., 1-4 6 8-10)"),
+    tasks: list[str] = typer.Argument(..., help="Task numbers or ranges (e.g., 1-4 6 8-10)"),
     working_dir: Optional[Path] = typer.Option(
         None, "-w", "--working-dir", help="Working directory"
     ),
@@ -28,7 +28,7 @@ def plan(
 @app.command()
 def implement(
     project: str = typer.Argument(..., help="Project name"),
-    tasks: List[str] = typer.Argument(..., help="Task numbers or ranges (e.g., 1-4 6 8-10)"),
+    tasks: list[str] = typer.Argument(..., help="Task numbers or ranges (e.g., 1-4 6 8-10)"),
     working_dir: Optional[Path] = typer.Option(
         None, "-w", "--working-dir", help="Working directory"
     ),

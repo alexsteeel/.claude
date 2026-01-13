@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     recovery_delays: list[int] = Field(default=[600, 1200, 1800])
     context_overflow_max_retries: int = 2
 
+    # Timeouts (in seconds)
+    health_check_timeout: int = 60
+    review_timeout: int = 1800  # 30 min
+
     # Paths
     log_dir: Path = Field(default=Path.home() / ".claude/logs")
     cli_dir: Path = Field(default=Path.home() / ".claude/cli")
@@ -45,3 +49,9 @@ def get_settings() -> Settings:
     if _settings is None:
         _settings = Settings()
     return _settings
+
+
+def reset_settings() -> None:
+    """Reset global settings instance (for testing)."""
+    global _settings
+    _settings = None

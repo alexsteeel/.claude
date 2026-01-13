@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Optional
 
 from rich.console import Console
 
@@ -19,7 +19,7 @@ console = Console()
 
 def run_implement(
     project: str,
-    task_args: List[str],
+    task_args: list[str],
     working_dir: Optional[Path] = None,
     max_budget: Optional[float] = None,
     no_recovery: bool = False,
@@ -68,10 +68,10 @@ def run_implement(
     # Notify session start
     notifier.session_start(project, tasks)
 
-    completed: List[int] = []
-    failed: List[int] = []
-    failed_reasons: List[str] = []
-    task_durations: Dict[int, str] = {}
+    completed: list[int] = []
+    failed: list[int] = []
+    failed_reasons: list[str] = []
+    task_durations: dict[int, str] = {}
     pipeline_stopped = False
     start_time = datetime.now()
 
@@ -165,13 +165,17 @@ def execute_task_with_recovery(
     session_log: SessionLog,
 ) -> TaskResult:
     """Execute single task with recovery loop."""
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     context_overflow_attempts = 0
     resume_session: Optional[str] = None
     recovery_note: Optional[str] = None
+    attempt = 0
 
     while True:
-        log_path = log_dir / f"{task_ref.replace('#', '_')}_{ts}.log"
+        # Generate unique timestamp for each attempt to avoid overwriting logs
+        attempt += 1
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        suffix = f"_attempt{attempt}" if attempt > 1 else ""
+        log_path = log_dir / f"{task_ref.replace('#', '_')}_{ts}{suffix}.log"
 
         prompt = build_prompt(
             skill="ralph-implement-python-task",
@@ -249,11 +253,14 @@ def execute_task_with_recovery(
 
 def run_batch_check(
     project: str,
-    completed_tasks: List[int],
+    completed_tasks: list[int],
     working_dir: Path,
     log_dir: Path,
-):
-    """Run batch check after all tasks complete."""
+) -> bool:
+    """Run batch check after all tasks complete.
+
+    Returns True if batch check succeeded, False otherwise.
+    """
     import subprocess
 
     console.rule("[cyan]Running batch check[/cyan]")
@@ -290,10 +297,21 @@ def run_batch_check(
             if process.stdout:
                 monitor.process_stream(process.stdout)
 
-            process.wait()
+            return_code = process.wait()
             monitor.print_summary()
 
+        # Check both process return code and monitor error type
+        if return_code != 0:
+            console.print(f"[red]✗ Batch check failed (exit code {return_code})[/red]")
+            return False
+
+        if not monitor.error_type.is_success:
+            console.print(f"[red]✗ Batch check failed: {monitor.error_type.value}[/red]")
+            return False
+
         console.print("[green]✓ Batch check complete[/green]")
+        return True
 
     except Exception as e:
         console.print(f"[red]✗ Batch check failed: {e}[/red]")
+        return False

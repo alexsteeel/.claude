@@ -4,7 +4,9 @@ import json
 import subprocess
 import sys
 from dataclasses import dataclass
+from typing import Optional
 
+from .config import Settings, get_settings
 from .errors import ErrorType
 
 
@@ -32,11 +34,16 @@ class HealthResult:
         return mapping.get(self.error_type, 3)
 
 
-def check_health(verbose: bool = False) -> HealthResult:
+def check_health(verbose: bool = False, settings: Optional[Settings] = None) -> HealthResult:
     """Run health check against Claude API.
 
     Sends minimal request to verify API is responding.
     """
+    if settings is None:
+        settings = get_settings()
+
+    timeout = settings.health_check_timeout
+
     try:
         result = subprocess.run(
             [
@@ -50,7 +57,7 @@ def check_health(verbose: bool = False) -> HealthResult:
             ],
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=timeout,
         )
 
         output = result.stdout + result.stderr
@@ -110,7 +117,7 @@ def check_health(verbose: bool = False) -> HealthResult:
         return HealthResult(ErrorType.UNKNOWN, "No valid response from API")
 
     except subprocess.TimeoutExpired:
-        return HealthResult(ErrorType.API_TIMEOUT, "Health check timed out after 60s")
+        return HealthResult(ErrorType.API_TIMEOUT, f"Health check timed out after {timeout}s")
     except FileNotFoundError:
         return HealthResult(ErrorType.UNKNOWN, "Claude CLI not found")
     except Exception as e:

@@ -4,12 +4,12 @@ import subprocess
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import List, NamedTuple
+from typing import NamedTuple
 
 from rich.console import Console
 from rich.table import Table
 
-from ..config import get_settings
+from ..config import Settings, get_settings
 from ..logging import format_duration
 
 console = Console()
@@ -58,7 +58,7 @@ def run_review(task_ref: str) -> int:
         except Exception as e:
             console.print(f"[yellow]Could not suspend workflow state: {e}[/yellow]")
 
-    results: List[ReviewResult] = []
+    results: list[ReviewResult] = []
 
     try:
         for review_name, skill_name in REVIEWS:
@@ -68,6 +68,7 @@ def run_review(task_ref: str) -> int:
                 skill_name=skill_name,
                 log_dir=log_dir,
                 timestamp=ts,
+                settings=settings,
             )
             results.append(result)
 
@@ -94,6 +95,7 @@ def run_single_review(
     skill_name: str,
     log_dir: Path,
     timestamp: str,
+    settings: Settings,
 ) -> ReviewResult:
     """Run single review and return result."""
     console.print(f"[cyan]Starting: {review_name}[/cyan]")
@@ -123,7 +125,7 @@ def run_single_review(
                 cmd,
                 stdout=log_file,
                 stderr=subprocess.STDOUT,
-                timeout=1800,  # 30 min timeout
+                timeout=settings.review_timeout,
             )
 
         duration = int(time.time() - start_time)
@@ -166,7 +168,7 @@ def run_single_review(
         )
 
 
-def print_review_summary(results: List[ReviewResult]):
+def print_review_summary(results: list[ReviewResult]):
     """Print summary table of review results."""
     success_count = sum(1 for r in results if r.success)
     total = len(results)
