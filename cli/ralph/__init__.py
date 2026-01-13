@@ -1,0 +1,3 @@
+"""Ralph - Autonomous task execution CLI."""
+
+__version__ = "0.1.0"

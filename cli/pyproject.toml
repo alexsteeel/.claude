@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ralph"
+version = "0.1.0"
+description = "Ralph - Autonomous task execution CLI"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "typer>=0.9.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+]
+
+[project.scripts]
+ralph = "ralph.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["ralph*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

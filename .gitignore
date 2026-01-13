@@ -28,3 +28,7 @@
 # And not scripts
 !scripts/
 !scripts/**
+
+# And not cli
+!cli/
+!cli/**

@@ -1,0 +1,64 @@
+"""Recovery loop for API errors."""
+
+import time
+from typing import Callable, Optional
+
+from .config import Config
+from .errors import ErrorType
+from .health import check_health
+from .logging import Console, format_duration
+
+
+def recovery_loop(
+    config: Config,
+    on_attempt: Optional[Callable[[int, int, int], None]] = None,
+    on_recovered: Optional[Callable[[], None]] = None,
+) -> bool:
+    """Wait and check health with configured delays.
+
+    Args:
+        config: Configuration with recovery_delays
+        on_attempt: Callback(attempt, max_attempts, delay) before each wait
+        on_recovered: Callback when API recovers
+
+    Returns:
+        True if recovered, False if all attempts failed.
+    """
+    delays = config.recovery_delays
+    max_attempts = len(delays)
+
+    for attempt, delay in enumerate(delays, 1):
+        if on_attempt:
+            on_attempt(attempt, max_attempts, delay)
+
+        # Wait
+        time.sleep(delay)
+
+        # Check health
+        result = check_health()
+
+        if result.is_healthy:
+            if on_recovered:
+                on_recovered()
+            return True
+
+    return False
+
+
+def should_recover(error_type: ErrorType, config: Config) -> bool:
+    """Check if error type should trigger recovery."""
+    if not config.recovery_enabled:
+        return False
+    return error_type.is_recoverable
+
+
+def should_retry_fresh(
+    error_type: ErrorType, attempt: int, config: Config
+) -> bool:
+    """Check if error should trigger fresh session retry.
+
+    For context overflow, allows limited retries with fresh session.
+    """
+    if error_type != ErrorType.CONTEXT_OVERFLOW:
+        return False
+    return attempt < config.context_overflow_max_retries

@@ -2,6 +2,7 @@
   "permissions": {
     "allow": [
       "Edit",
+      "Write",
       "Bash(gh issue view:*)",
       "Bash(docker exec:*)",
       "Bash(docker ps:*)",
@@ -11,7 +12,10 @@
       "Bash(docker cp:*)",
       "WebSearch",
       "Bash(gh search code:*)",
-      "Bash(gh search:*)"
+      "Bash(gh search:*)",
+      "Bash(timeout 5 docker exec:*)",
+      "Bash(ls:*)",
+      "Bash(PYTHONPATH=. python:*)"
     ]
   }
 }
