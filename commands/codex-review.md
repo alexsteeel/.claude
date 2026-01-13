@@ -42,9 +42,12 @@ which codex || { echo "ERROR: codex not found"; exit 1; }
 Запусти Codex CLI для проверки git changes. Вывод перенаправляй во временный файл чтобы не засорять контекст.
 
 ```bash
-# Создай временную директорию
-REVIEW_DIR="/tmp/code-review-$(date +%s)"
+# Создай директорию для логов (если не существует)
+REVIEW_DIR="$HOME/.claude/logs/reviews"
 mkdir -p "$REVIEW_DIR"
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+TASK_SAFE=$(echo "{{task_ref}}" | tr '#' '_')
+LOG_FILE="${REVIEW_DIR}/${TASK_SAFE}_codex-review_${TIMESTAMP}.log"
 
 # Запусти codex review с gpt-5-codex и high reasoning effort (inline profile)
 codex review \
@@ -234,13 +237,13 @@ codex review \
 - НЕ ИЗМЕНЯЙ КОД — только анализируй
 - Результаты ДОБАВЛЯЙ к существующему Review (append, не replace)
 - Если нет замечаний — напиши 'NO ISSUES FOUND'
-" 2>&1 > "$REVIEW_DIR/codex-output.log"
+" 2>&1 | tee "$LOG_FILE"
 
 # Проверь exit code
 CODEX_EXIT_CODE=$?
 if [ $CODEX_EXIT_CODE -ne 0 ]; then
     echo "ERROR: codex exited with code $CODEX_EXIT_CODE"
-    cat "$REVIEW_DIR/codex-output.log"
+    echo "Log file: $LOG_FILE"
 fi
 ```
 
@@ -251,7 +254,7 @@ fi
 2. Содержимое лог-файла на наличие ошибок
 
 **Если codex завершился с ошибкой:**
-- Прочитай лог из `$REVIEW_DIR/codex-output.log`
+- Прочитай лог из `$LOG_FILE`
 - **КРИТИЧЕСКАЯ ОШИБКА** → сообщи пользователю точную ошибку
 - **НЕ ПРОДОЛЖАЙ** к Phase 3
 - **НЕ ЗАМЕНЯЙ** codex своим собственным ревью
@@ -269,7 +272,7 @@ fi
 3. **Если секция Review отсутствует или пустая:**
    - Codex НЕ выполнил свою задачу
    - **КРИТИЧЕСКАЯ ОШИБКА** → сообщи пользователю
-   - Прочитай лог `$REVIEW_DIR/codex-output.log` для диагностики
+   - Прочитай лог `$LOG_FILE` для диагностики
    - **НЕ ПРОДОЛЖАЙ** к Phase 4
    - **НЕ ЗАПИСЫВАЙ** своё собственное ревью вместо codex
 
@@ -327,7 +330,7 @@ codex review \
 
 Если всё исправлено — добавь в Review: '## Iteration $ITERATION: ALL ISSUES RESOLVED'
 Если есть новые проблемы — добавь их в том же формате с заголовком '## Iteration $ITERATION'
-" 2>&1 > "$REVIEW_DIR/codex-iteration-$ITERATION.log"
+" 2>&1 | tee "${REVIEW_DIR}/${TASK_SAFE}_codex-review-iter${ITERATION}_${TIMESTAMP}.log"
 ```
 
 **Повторяй итерации** пока:
@@ -375,7 +378,7 @@ codex review \
 
 ### Что делать при ошибке
 
-1. Прочитай лог из временного файла (`$REVIEW_DIR/codex-output.log`)
+1. Прочитай лог из временного файла (`$LOG_FILE`)
 2. Сообщи пользователю **точную ошибку** (не общие слова)
 3. Предложи варианты:
    - Исправить проблему с codex и повторить

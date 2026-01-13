@@ -393,6 +393,21 @@ expect(page.locator('[data-testid="user-profile"]')).to_be_visible()
 - [ ] Проверка навигации между страницами
 - [ ] Скриншот ошибочных состояний (если применимо)
 
+### Логирование тестов
+
+**Логи тестов пиши в `~/.claude/logs/tests/`:**
+
+```bash
+# Создай директорию если нет
+mkdir -p ~/.claude/logs/tests
+
+# Запуск тестов с сохранением логов
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+./run_tests.sh path/to/tests 2>&1 | tee ~/.claude/logs/tests/${PROJECT}_${TASK_NUM}_${TIMESTAMP}.log
+```
+
+**НЕ используй `/tmp/` для логов** — они не будут видны в `ralph logs`.
+
 ### Чеклист тестов
 
 - [ ] **Happy path**: основной сценарий работает

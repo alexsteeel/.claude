@@ -21,6 +21,7 @@ class LogType(str, Enum):
     implement = "implement"
     plan = "plan"
     review = "review"
+    tests = "tests"
     hooks = "hooks"
     all = "all"
 
@@ -30,6 +31,7 @@ LOG_DIRS = {
     LogType.implement: "ralph-implement",
     LogType.plan: "ralph-plan",
     LogType.review: "reviews",
+    LogType.tests: "tests",
     LogType.hooks: "hooks",
 }
 
