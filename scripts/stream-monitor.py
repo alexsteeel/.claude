@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-"""Format Claude stream-json output for readable terminal display.
+"""Stream Monitor - Format and monitor Claude stream-json output.
 
 Features:
+- Real-time formatting of Claude stream-json output
+- Error classification (AUTH_EXPIRED, RATE_LIMIT, CONTEXT_OVERFLOW, etc.)
 - Timestamps for each message
 - Token/cost metrics from API responses
 - Color-coded output (Claude text vs tools vs MCP)
@@ -180,6 +182,45 @@ def process_init(data: dict) -> str:
     return f"{DIM}Session: {session_id} | Model: {model} | MCP: {mcp_status or 'none'}{NC}"
 
 
+def classify_error(data: dict) -> tuple[str, str]:
+    """Classify error type from result data.
+
+    Returns (error_type, details) tuple.
+    Error types: AUTH_EXPIRED, RATE_LIMIT, OVERLOADED, CONTEXT_OVERFLOW, FORBIDDEN, API_TIMEOUT, UNKNOWN
+    """
+    error_msg = str(data.get("result", ""))
+    error_code = str(data.get("error_code", ""))
+    errors = data.get("errors", [])
+    all_text = f"{error_msg} {error_code} {' '.join(str(e) for e in errors)}".lower()
+
+    # Context overflow
+    if "prompt is too long" in all_text or "context" in all_text and "overflow" in all_text:
+        return "CONTEXT_OVERFLOW", "Prompt is too long - context overflow"
+
+    # Auth error (401)
+    if "401" in all_text or "unauthorized" in all_text or "authentication" in all_text:
+        return "AUTH_EXPIRED", "Authentication failed (401)"
+
+    # Rate limit (429)
+    if "429" in all_text or "rate" in all_text and "limit" in all_text:
+        return "RATE_LIMIT", "Rate limited (429)"
+
+    # Overloaded (529)
+    if "529" in all_text or "overloaded" in all_text:
+        return "OVERLOADED", "API overloaded (529)"
+
+    # Forbidden (403)
+    if "403" in all_text or "forbidden" in all_text:
+        return "FORBIDDEN", "Forbidden (403)"
+
+    # API timeout (0 tokens)
+    usage = data.get("usage", {})
+    if usage.get("input_tokens", 0) == 0 and usage.get("output_tokens", 0) == 0:
+        return "API_TIMEOUT", "API timeout (0 tokens)"
+
+    return "UNKNOWN", "Unknown error"
+
+
 def process_result(data: dict) -> str:
     """Process result message with metrics."""
     global session_stats
@@ -195,35 +236,35 @@ def process_result(data: dict) -> str:
     session_stats["cost_usd"] += cost
 
     if data.get("is_error") or data.get("subtype") == "error_during_execution":
-        # Show error details
+        # Classify the error
+        error_type, error_detail = classify_error(data)
+
+        # Build detailed error message
         error_msg = data.get("result", "")
         error_code = data.get("error_code", "")
         subtype = data.get("subtype", "")
-        errors = data.get("errors", [])  # Array of error messages
+        errors = data.get("errors", [])
 
-        details = []
+        parts = [f"{error_type}"]
         if error_code:
-            details.append(f"code={error_code}")
+            parts.append(f"code={error_code}")
         if subtype:
-            details.append(f"type={subtype}")
+            parts.append(f"type={subtype}")
 
         # Show errors array (primary source of error details)
         if errors:
-            errors_str = "; ".join(str(e) for e in errors[:3])  # First 3 errors
+            errors_str = "; ".join(str(e) for e in errors[:3])
             if len(errors) > 3:
                 errors_str += f" (+{len(errors)-3} more)"
-            details.append(errors_str)
-
-        if error_msg:
+            parts.append(errors_str)
+        elif error_msg:
             msg_short = error_msg[:200] + ("..." if len(error_msg) > 200 else "")
-            details.append(msg_short)
+            parts.append(msg_short)
 
-        if not details:
-            # Fallback: show available keys for debugging
-            error_keys = [k for k in data.keys() if k not in ("usage", "total_cost_usd", "type", "modelUsage")]
-            details.append(f"keys={error_keys}")
+        # Add token info for debugging
+        parts.append(f"Tokens: {input_t} in / {output_t} out")
 
-        return f"{RED}❌ ERROR: {' | '.join(details)}{NC}"
+        return f"{RED}❌ ERROR: {' | '.join(parts)}{NC}"
 
     return f"{MAGENTA}📊 {input_t:,} in / {output_t:,} out | ${cost:.4f}{NC}"
 

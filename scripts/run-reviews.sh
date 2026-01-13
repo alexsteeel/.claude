@@ -121,7 +121,7 @@ for REVIEW_ENTRY in "${REVIEWS[@]}"; do
     cd "$WORKING_DIR"
     # < /dev/null prevents hang when running from another Claude session (no TTY)
     # See: https://github.com/anthropics/claude-code/issues/9026
-    $CLAUDE_CMD "/${REVIEW_CMD} ${TASK_REF}" < /dev/null 2>&1 | python3 "$SCRIPT_DIR/format-output.py" > "$LOG_FILE"
+    $CLAUDE_CMD "/${REVIEW_CMD} ${TASK_REF}" < /dev/null 2>&1 | python3 "$SCRIPT_DIR/stream-monitor.py" > "$LOG_FILE"
     EXIT_CODE=${PIPESTATUS[0]}
     set -e
 
