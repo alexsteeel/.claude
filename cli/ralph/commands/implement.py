@@ -274,7 +274,7 @@ def run_batch_check(
         "-p",
         f"/ralph-batch-check {task_refs}",
         "--model",
-        "opus",
+        "sonnet",
         "--output-format",
         "stream-json",
         "--verbose",

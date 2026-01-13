@@ -50,6 +50,8 @@ def check_health(verbose: bool = False, settings: Optional[Settings] = None) -> 
                 "claude",
                 "-p",
                 "Reply with OK",
+                "--model",
+                "haiku",
                 "--max-turns",
                 "1",
                 "--output-format",
