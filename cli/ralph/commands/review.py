@@ -110,7 +110,7 @@ def run_single_review(
         "-p",
         f"/{skill_name} {task_ref}",
         "--model",
-        "opus",
+        "sonnet",
         "--output-format",
         "stream-json",
         "--verbose",

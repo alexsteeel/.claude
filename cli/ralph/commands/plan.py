@@ -63,14 +63,20 @@ def run_plan(
             console.print(f"[dim]Cleaned {len(cleaned)} files[/dim]")
             session_log.append(f"Cleaned {len(cleaned)} files")
 
-        # Run Claude interactively (no --print, with tty)
+        # Run Claude interactively (no pipe - Claude writes directly to tty)
+        #
+        # ⚠️  WARNING: DO NOT add pipes or redirect stdout/stderr!
+        # Claude CLI in interactive mode writes directly to /dev/tty, bypassing stdout.
+        # Adding any redirection will block tty output and make terminal appear frozen.
+        #
         cmd = [
             "claude",
-            "-p",
-            f"/ralph-plan-task {task_ref}",
             "--model",
             "opus",
-            "--verbose",
+            "--dangerously-skip-permissions",
+            "--settings",
+            '{"outputStyle": "explanatory"}',
+            f"/ralph-plan-task {task_ref}",  # prompt as last argument, no -p flag
         ]
 
         try:

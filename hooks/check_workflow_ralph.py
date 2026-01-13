@@ -48,7 +48,7 @@ CHECKLIST = """
 - [ ] Визуальный анализ через Opus + playwright выполнен
 - [ ] Проблемы UI исправлены (перекрытия, вёрстка, юзабилити)
 
-### Reviews (Phase 6) — run-reviews.sh
+### Reviews (Phase 6) — ralph review
 - [ ] `/ralph-review-code` выполнен (5 агентов)
 - [ ] `/ralph-review-simplify` выполнен
 - [ ] `/ralph-review-security` выполнен
