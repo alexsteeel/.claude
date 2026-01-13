@@ -46,6 +46,14 @@ ralph review myproject#1
 # API health check
 ralph health
 ralph health -v
+
+# View and manage logs
+ralph logs                          # List recent logs
+ralph logs -t implement             # Filter by type
+ralph logs view <file>              # View with highlighting
+ralph logs view <file> --vim        # Open in vim
+ralph logs tail <file>              # Real-time (tail -f)
+ralph logs clean                    # Cleanup old logs
 ```
 
 ### Task Number Ranges

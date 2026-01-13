@@ -25,6 +25,14 @@ ralph review myproject#1
 # Check API health
 ralph health
 ralph health -v
+
+# View logs
+ralph logs                          # List recent logs
+ralph logs -t implement             # Filter by type
+ralph logs view session.log         # View with syntax highlighting
+ralph logs view session.log --vim   # Open in vim
+ralph logs tail session.log         # Real-time monitoring
+ralph logs clean --days 7           # Cleanup old logs
 ```
 
 ## Commands
@@ -35,6 +43,29 @@ ralph health -v
 | `implement` | Autonomous implementation with recovery and notifications |
 | `review` | Run code reviews in isolated contexts |
 | `health` | Check API health status |
+| `logs` | View and manage log files |
+
+### Logs Subcommands
+
+| Subcommand | Description |
+|------------|-------------|
+| `logs` | List recent logs (default) |
+| `logs view <file>` | View log with syntax highlighting |
+| `logs tail <file>` | Real-time monitoring (tail -f) |
+| `logs clean` | Cleanup old log files |
+
+**Logs options:**
+- `-t, --type` — Filter by type (implement, plan, review, hooks)
+- `--task` — Filter by task reference (e.g., project#1)
+- `-n, --limit` — Maximum logs to show (default: 20)
+
+**View options:**
+- `-n, --lines` — Number of lines to show
+- `--head` — Show first N lines instead of last
+- `--vim, -v` — Open in vim
+- `--editor, -e` — Open in $EDITOR
+- `--pager` — Force pager (auto for >50KB)
+- `--no-pager` — Disable pager
 
 ## Configuration
 
@@ -79,5 +110,6 @@ ralph/
     ├── plan.py
     ├── implement.py
     ├── review.py
-    └── health.py
+    ├── health.py
+    └── logs.py
 ```

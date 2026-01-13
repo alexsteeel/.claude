@@ -16,7 +16,11 @@
       "Bash(timeout 5 docker exec:*)",
       "Bash(ls:*)",
       "Bash(PYTHONPATH=. python:*)",
-      "Bash(ralph --help:*)"
+      "Bash(ralph --help:*)",
+      "Bash(pytest tests/ -v:*)",
+      "Bash(ralph health:*)",
+      "Bash(ralph logs:*)",
+      "Bash(pytest:*)"
     ]
   }
 }
