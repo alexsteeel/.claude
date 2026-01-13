@@ -1,7 +1,10 @@
 """Health check command."""
 
+from rich.console import Console
+
 from ..health import check_health
-from ..logging import console
+
+console = Console()
 
 
 def run_health(verbose: bool = False) -> int:
@@ -10,8 +13,8 @@ def run_health(verbose: bool = False) -> int:
 
     if verbose or not result.is_healthy:
         if result.is_healthy:
-            console.success(result.message)
+            console.print(f"[green]✓ {result.message}[/green]")
         else:
-            console.error(f"{result.error_type.value}: {result.message}")
+            console.print(f"[red]✗ {result.error_type.value}: {result.message}[/red]")
 
     return result.exit_code

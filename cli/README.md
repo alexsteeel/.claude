@@ -38,7 +38,7 @@ ralph health -v
 
 ## Configuration
 
-Configuration is loaded from `~/.claude/scripts/.env`:
+Configuration is loaded from `~/.claude/.env`:
 
 ```bash
 # Telegram notifications

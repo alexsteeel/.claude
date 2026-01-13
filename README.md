@@ -1,16 +1,25 @@
 # Claude Code Configuration
 
-Конфигурация Claude Code: команды, хуки и скрипты для автоматизации разработки.
+Конфигурация Claude Code: команды, хуки и CLI для автоматизации разработки.
 
 ## Быстрый старт
 
 ```bash
+# Установка CLI
+cd ~/.claude/cli
+pip install -e .
+
 # Планирование задач (интерактивно)
-cd /path/to/project
-~/.claude/scripts/ralph-plan.sh myproject 1 2 3
+ralph plan myproject 1 2 3
 
 # Реализация задач (автономно)
-WORKING_DIR=/path/to/project ~/.claude/scripts/ralph-implement.sh myproject 1 2 3
+ralph implement myproject 1 2 3 -w /path/to/project
+
+# Ревью кода
+ralph review myproject#1
+
+# Проверка API
+ralph health -v
 ```
 
 ## Структура
@@ -19,13 +28,38 @@ WORKING_DIR=/path/to/project ~/.claude/scripts/ralph-implement.sh myproject 1 2 
 ~/.claude/
 ├── commands/           # Slash-команды (/command-name)
 ├── hooks/              # Хуки автоматизации workflow
-├── scripts/            # Shell-скрипты для запуска loops
-├── ARCHITECTURE.md     # Диаграммы работы скриптов
+├── cli/                # Ralph Python CLI
+│   ├── ralph/          # Модули пакета
+│   └── tests/          # pytest тесты
+├── .env                # Конфигурация (git-ignored)
+├── .env.example        # Шаблон конфигурации
 ├── CLAUDE.md           # Техническая документация для Claude
 └── README.md           # Этот файл
 ```
 
-## Команды
+## Ralph CLI
+
+| Команда | Описание |
+|---------|----------|
+| `ralph plan` | Интерактивное планирование задач |
+| `ralph implement` | Автономная реализация с recovery |
+| `ralph review` | Запуск ревью в изолированных сессиях |
+| `ralph health` | Проверка доступности API |
+
+### Примеры
+
+```bash
+# Планирование нескольких задач
+ralph plan myproject 1-5
+
+# Реализация с ограничением бюджета
+ralph implement myproject 1-5 -w /workspaces/myapp --max-budget 10
+
+# Отключить автоматическое восстановление
+ralph implement myproject 1 --no-recovery
+```
+
+## Команды Claude
 
 ### Основной workflow
 
@@ -49,9 +83,10 @@ WORKING_DIR=/path/to/project ~/.claude/scripts/ralph-implement.sh myproject 1 2 
 
 | Команда | Описание |
 |---------|----------|
-| `/pr-review` | Комплексное ревью через 6 специализированных агентов |
-| `/security-review` | Аудит безопасности |
-| `/codex-review project#N` | Ревью через Codex CLI |
+| `/ralph-review-code project#N` | 5 агентов ревью параллельно |
+| `/ralph-review-simplify project#N` | Упрощение кода |
+| `/ralph-review-security project#N` | Аудит безопасности |
+| `/ralph-review-codex project#N` | Ревью через Codex CLI |
 | `/python-linters` | Запуск ruff и djlint |
 
 ### Управление задачами
@@ -61,52 +96,16 @@ WORKING_DIR=/path/to/project ~/.claude/scripts/ralph-implement.sh myproject 1 2 
 | `/create-tasks` | Создание задач в md-task-mcp |
 | `/memorize-task` | Сохранение контекста задачи в память |
 
-## Скрипты
-
-### ralph-plan.sh — Планирование
-
-```bash
-# Запуск из директории проекта
-cd /path/to/project
-~/.claude/scripts/ralph-plan.sh <project> <task_numbers...>
-
-# Пример
-~/.claude/scripts/ralph-plan.sh myproject 1 2 3
-```
-
-- **Режим**: интерактивный (Claude в терминале)
-- **Взаимодействие**: можно общаться с Claude, уточнять требования
-- **Между задачами**: спрашивает "Continue to next task?"
-- **Результат**: план записывается в задачу, статус → `work`
-
-### ralph-implement.sh — Реализация
-
-```bash
-# Указать директорию проекта через WORKING_DIR
-WORKING_DIR=/path/to/project ~/.claude/scripts/ralph-implement.sh <project> <task_numbers...>
-
-# Примеры
-WORKING_DIR=/workspaces/myapp ~/.claude/scripts/ralph-implement.sh myproject 1 2 3
-WORKING_DIR=/workspaces/myapp MAX_BUDGET=10 ~/.claude/scripts/ralph-implement.sh myproject 1
-```
-
-- **Режим**: автономный (`--print`, без взаимодействия)
-- **Взаимодействие**: нет, полностью автономно
-- **Логи**: `~/.claude/logs/ralph-implement/`
-- **При проблемах**: задача переводится в `hold` с описанием блокировки
-- **Результат**: коммит создаётся автоматически, статус → `done`
-
 ## Workflow
 
 ### Типичный сценарий
 
 ```bash
 # 1. Утром: планируем задачи интерактивно
-cd /workspaces/myapp
-~/.claude/scripts/ralph-plan.sh myproject 5 6 7
+ralph plan myproject 5 6 7
 
 # 2. Днём: запускаем автономную реализацию
-WORKING_DIR=/workspaces/myapp ~/.claude/scripts/ralph-implement.sh myproject 5 6 7
+ralph implement myproject 5 6 7 -w /workspaces/myapp
 
 # 3. Вечером: проверяем результаты
 # - Задачи в статусе "done" — готовы к ревью
@@ -122,6 +121,21 @@ WORKING_DIR=/workspaces/myapp ~/.claude/scripts/ralph-implement.sh myproject 5 6
 | `done` | Реализация завершена |
 | `human approved` | Проверено человеком |
 | `hold` | Заблокирована, требует внимания |
+
+## Конфигурация
+
+Создайте `~/.claude/.env`:
+
+```bash
+# Telegram уведомления (опционально)
+TELEGRAM_BOT_TOKEN="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
+TELEGRAM_CHAT_ID="-1001234567890"
+
+# Настройки восстановления
+RECOVERY_ENABLED=true
+RECOVERY_DELAYS="600,1200,1800"  # 10, 20, 30 минут
+CONTEXT_OVERFLOW_MAX_RETRIES=2
+```
 
 ## Хуки
 
@@ -140,11 +154,7 @@ WORKING_DIR=/workspaces/myapp ~/.claude/scripts/ralph-implement.sh myproject 5 6
 
 ## Docker-контейнеры
 
-Конфигурация синхронизируется в:
-- `your-project-devcontainer-1`
-- `your-project-devcontainer-2`
-
-Пользователь в контейнерах: `claude`
+Конфигурация синхронизируется в контейнеры.
 
 ```bash
 # Синхронизация файла

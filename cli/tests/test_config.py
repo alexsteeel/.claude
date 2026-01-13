@@ -2,122 +2,91 @@
 
 import pytest
 from pathlib import Path
-from ralph.config import Config, _load_env_file
+from ralph.config import Settings
 
 
-class TestLoadEnvFile:
-    """Tests for _load_env_file function."""
-
-    def test_load_basic(self, temp_dir):
-        """Test loading basic key=value pairs."""
-        env_file = temp_dir / ".env"
-        env_file.write_text("""
-KEY1=value1
-KEY2=value2
-""")
-        result = _load_env_file(env_file)
-        assert result["KEY1"] == "value1"
-        assert result["KEY2"] == "value2"
-
-    def test_load_with_quotes(self, temp_dir):
-        """Test loading values with quotes."""
-        env_file = temp_dir / ".env"
-        env_file.write_text("""
-KEY1="double quoted"
-KEY2='single quoted'
-""")
-        result = _load_env_file(env_file)
-        assert result["KEY1"] == "double quoted"
-        assert result["KEY2"] == "single quoted"
-
-    def test_skip_comments(self, temp_dir):
-        """Test that comments are skipped."""
-        env_file = temp_dir / ".env"
-        env_file.write_text("""
-# This is a comment
-KEY1=value1
-# Another comment
-KEY2=value2
-""")
-        result = _load_env_file(env_file)
-        assert len(result) == 2
-        assert "# This is a comment" not in result
-
-    def test_skip_empty_lines(self, temp_dir):
-        """Test that empty lines are skipped."""
-        env_file = temp_dir / ".env"
-        env_file.write_text("""
-KEY1=value1
-
-KEY2=value2
-
-""")
-        result = _load_env_file(env_file)
-        assert len(result) == 2
-
-    def test_missing_file(self, temp_dir):
-        """Test loading from missing file returns empty dict."""
-        env_file = temp_dir / "nonexistent.env"
-        result = _load_env_file(env_file)
-        assert result == {}
-
-
-class TestConfig:
-    """Tests for Config dataclass."""
+class TestSettings:
+    """Tests for Settings class."""
 
     def test_defaults(self):
         """Test default configuration values."""
-        config = Config()
+        # Create settings without any env vars
+        settings = Settings(
+            _env_file=None,  # Don't load from file
+        )
 
-        assert config.telegram_bot_token is None
-        assert config.telegram_chat_id is None
-        assert config.recovery_enabled is True
-        assert config.recovery_delays == [600, 1200, 1800]
-        assert config.context_overflow_max_retries == 2
+        assert settings.telegram_bot_token is None
+        assert settings.telegram_chat_id is None
+        assert settings.recovery_enabled is True
+        assert settings.recovery_delays == [600, 1200, 1800]
+        assert settings.context_overflow_max_retries == 2
 
-    def test_telegram_configured(self):
-        """Test telegram_configured property."""
-        config = Config()
-        assert not config.telegram_configured
+    def test_telegram_configured_false(self):
+        """Test telegram_configured when not configured."""
+        settings = Settings(_env_file=None)
+        assert not settings.telegram_configured
 
-        config = Config(telegram_bot_token="token", telegram_chat_id="chat")
-        assert config.telegram_configured
+    def test_telegram_configured_partial(self):
+        """Test telegram_configured with only token."""
+        settings = Settings(
+            _env_file=None,
+            telegram_bot_token="token",
+        )
+        assert not settings.telegram_configured
 
-        config = Config(telegram_bot_token="token")
-        assert not config.telegram_configured
+    def test_telegram_configured_true(self):
+        """Test telegram_configured when both values set."""
+        settings = Settings(
+            _env_file=None,
+            telegram_bot_token="token",
+            telegram_chat_id="chat",
+        )
+        assert settings.telegram_configured
 
-    def test_load_from_env(self, temp_env_file):
+    def test_load_from_env_file(self, temp_dir):
         """Test loading configuration from .env file."""
-        config = Config.load(temp_env_file)
-
-        assert config.telegram_bot_token == "test_token_123"
-        assert config.telegram_chat_id == "test_chat_456"
-        assert config.recovery_enabled is True
-        assert config.recovery_delays == [60, 120, 180]
-        assert config.context_overflow_max_retries == 3
-
-    def test_load_with_invalid_delays(self, temp_dir):
-        """Test loading with invalid recovery delays."""
         env_file = temp_dir / ".env"
-        env_file.write_text("RECOVERY_DELAYS=invalid,values")
+        env_file.write_text("""
+TELEGRAM_BOT_TOKEN=test_token_123
+TELEGRAM_CHAT_ID=test_chat_456
+RECOVERY_ENABLED=true
+RECOVERY_DELAYS=[60,120,180]
+CONTEXT_OVERFLOW_MAX_RETRIES=3
+""")
+        settings = Settings(_env_file=env_file)
 
-        config = Config.load(env_file)
-        # Should fall back to defaults
-        assert config.recovery_delays == [600, 1200, 1800]
-
-    def test_load_with_invalid_retries(self, temp_dir):
-        """Test loading with invalid max retries."""
-        env_file = temp_dir / ".env"
-        env_file.write_text("CONTEXT_OVERFLOW_MAX_RETRIES=invalid")
-
-        config = Config.load(env_file)
-        # Should fall back to default
-        assert config.context_overflow_max_retries == 2
+        assert settings.telegram_bot_token == "test_token_123"
+        assert settings.telegram_chat_id == "test_chat_456"
+        assert settings.recovery_enabled is True
+        assert settings.recovery_delays == [60, 120, 180]
+        assert settings.context_overflow_max_retries == 3
 
     def test_load_recovery_disabled(self, temp_dir):
         """Test loading with recovery disabled."""
         env_file = temp_dir / ".env"
         env_file.write_text("RECOVERY_ENABLED=false")
 
-        config = Config.load(env_file)
-        assert config.recovery_enabled is False
+        settings = Settings(_env_file=env_file)
+        assert settings.recovery_enabled is False
+
+    def test_custom_paths(self, temp_dir):
+        """Test setting custom paths."""
+        settings = Settings(
+            _env_file=None,
+            log_dir=temp_dir / "logs",
+            cli_dir=temp_dir / "cli",
+        )
+        assert settings.log_dir == temp_dir / "logs"
+        assert settings.cli_dir == temp_dir / "cli"
+
+    def test_from_env_vars(self, monkeypatch):
+        """Test loading from environment variables."""
+        monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "env_token")
+        monkeypatch.setenv("TELEGRAM_CHAT_ID", "env_chat")
+        monkeypatch.setenv("CONTEXT_OVERFLOW_MAX_RETRIES", "5")
+
+        settings = Settings(_env_file=None)
+
+        assert settings.telegram_bot_token == "env_token"
+        assert settings.telegram_chat_id == "env_chat"
+        assert settings.context_overflow_max_retries == 5

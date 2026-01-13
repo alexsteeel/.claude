@@ -6,7 +6,7 @@ import urllib.request
 from datetime import datetime
 from typing import Optional
 
-from .config import get_config
+from .config import get_settings
 
 
 def escape_markdown(text: str) -> str:
@@ -53,9 +53,9 @@ class Notifier:
         If token/chat_id not provided, loads from config.
         """
         if token is None or chat_id is None:
-            config = get_config()
-            token = token or config.telegram_bot_token
-            chat_id = chat_id or config.telegram_chat_id
+            settings = get_settings()
+            token = token or settings.telegram_bot_token
+            chat_id = chat_id or settings.telegram_chat_id
 
         self.token = token
         self.chat_id = chat_id

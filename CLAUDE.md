@@ -9,77 +9,105 @@ This repository contains Claude Code configuration: commands, skills, and hooks.
 ├── commands/           # Slash commands (/command-name)
 ├── skills/             # User-defined skills
 ├── hooks/              # Workflow automation hooks
-└── scripts/            # Shell scripts for running loops
+├── cli/                # Ralph Python CLI package
+│   ├── ralph/          # Package modules
+│   └── tests/          # pytest tests
+├── .env                # Configuration (git-ignored)
+└── .env.example        # Configuration template
 ```
 
-## Scripts
+## Ralph CLI
 
-Shell scripts for running Ralph loops manually:
+Python CLI for autonomous task execution with API recovery and Telegram notifications.
+
+### Installation
 
 ```bash
-# Planning (interactive, with user feedback)
-./scripts/ralph-plan.sh <project> <task_numbers...>
-./scripts/ralph-plan.sh myproject 1 2 3
-./scripts/ralph-plan.sh myproject 1-4 6 8-10    # ranges supported!
+cd ~/.claude/cli
+pip install -e .
+```
 
-# Implementation (autonomous, no interaction)
-./scripts/ralph-implement.sh <project> <task_numbers...>
-./scripts/ralph-implement.sh myproject 1 2 3
-./scripts/ralph-implement.sh myproject 1-4 6 8-10    # ranges supported!
+### Commands
 
-# With options
-WORKING_DIR=/path/to/project MAX_BUDGET=5 ./scripts/ralph-implement.sh myproject 1-5
+```bash
+# Interactive planning
+ralph plan <project> <tasks...>
+ralph plan myproject 1-4 6 8-10
 
-# With retry settings
-MAX_RETRIES=5 RETRY_DELAY=60 ./scripts/ralph-implement.sh myproject 1
+# Autonomous implementation
+ralph implement <project> <tasks...>
+ralph implement myproject 1-4 6 8-10
+ralph implement myproject 1-3 -w /path/to/project --max-budget 5
+
+# Code reviews (isolated contexts)
+ralph review <task_ref>
+ralph review myproject#1
+
+# API health check
+ralph health
+ralph health -v
 ```
 
 ### Task Number Ranges
-
-Both scripts support range syntax for task numbers:
 
 | Syntax | Expands to |
 |--------|------------|
 | `1-4` | `1 2 3 4` |
 | `1-4 6 8-10` | `1 2 3 4 6 8 9 10` |
-| `5-3` | `5 4 3` (reverse) |
 
-| Script | Mode | Description |
-|--------|------|-------------|
-| `ralph-plan.sh` | Interactive | Runs `/ralph-plan-task` for each task, allows user communication |
-| `ralph-implement.sh` | Autonomous | Runs `/ralph-implement-python-task` for each task, then `/ralph-batch-check` |
-| `run-reviews.sh` | Autonomous | Runs all review commands in isolated contexts |
+### Options
 
-### ralph-implement.sh Options
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `WORKING_DIR` | `$(pwd)` | Working directory for Claude |
-| `MAX_BUDGET` | unlimited | Maximum budget in USD per task |
-| `MAX_RETRIES` | 3 | Max retry attempts on API timeout |
-| `RETRY_DELAY` | 30 | Delay in seconds between retries |
+| Option | Description |
+|--------|-------------|
+| `-w, --working-dir` | Working directory for Claude |
+| `--max-budget` | Maximum budget in USD per task |
+| `--no-recovery` | Disable automatic recovery |
 
 ### Error Handling
 
-The script automatically detects and diagnoses failures:
+The CLI automatically detects and handles failures:
 
 | Error Type | Detection | Action |
 |------------|-----------|--------|
-| `CONTEXT_OVERFLOW` | `Prompt is too long` | Fail (no retry) |
-| `API_TIMEOUT` | `Tokens: 0 in / 0 out` | Auto-retry with `--resume` |
-| `RATE_LIMIT` | `429` or `rate limit` | Fail (manual retry needed) |
-| `AUTH_ERROR` | `401` or `403` | Fail |
-| `UNKNOWN_ERROR` | `Unknown error` | Auto-retry with `--resume` |
+| `CONTEXT_OVERFLOW` | `Prompt is too long` | Retry with fresh session (max 2) |
+| `API_TIMEOUT` | `Tokens: 0 in / 0 out` | Recovery loop → Retry |
+| `RATE_LIMIT` | `429` | Recovery loop → Retry |
+| `OVERLOADED` | `529` | Recovery loop → Retry |
+| `AUTH_EXPIRED` | `401` | Recovery loop → Retry |
+| `FORBIDDEN` | `403` | Stop pipeline |
+
+### Recovery Loop
+
+When recoverable error detected:
+1. **Wait 10 min** → Health check
+2. **Wait 20 min** → Health check (if still failing)
+3. **Wait 30 min** → Health check (if still failing)
+4. **If all fail** → Stop pipeline, send Telegram alert
+
+### Configuration
+
+Create `~/.claude/.env`:
+
+```bash
+# Telegram notifications (optional)
+TELEGRAM_BOT_TOKEN="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
+TELEGRAM_CHAT_ID="-1001234567890"
+
+# Recovery settings
+RECOVERY_ENABLED=true
+RECOVERY_DELAYS="600,1200,1800"  # 10, 20, 30 minutes
+CONTEXT_OVERFLOW_MAX_RETRIES=2
+```
 
 ### Cleanup Before Each Task
 
-Before starting each task, the script cleans uncommitted changes:
+Before starting each task, uncommitted changes are cleaned:
 ```bash
 git checkout -- .
 git clean -fd
 ```
 
-This ensures each task starts with a clean codebase, preventing contamination from failed previous tasks.
+This ensures each task starts with a clean codebase.
 
 ## Commands
 
@@ -184,7 +212,7 @@ All logs are stored in `~/.claude/logs/`:
 
 ### Log Format
 
-**Scripts**: Full Claude output with timestamps and headers.
+**CLI**: Full Claude output with timestamps and headers.
 
 **Hooks**: `[YYYY-MM-DD HH:MM:SS] EVENT: message`
 - `WORKFLOW_START` / `WORKFLOW_CONFIRMED` / `WORKFLOW_HOLD`
@@ -232,7 +260,7 @@ All workflows require comprehensive testing:
 3. Implementation
 4. Initial Testing (with data-testid for UI tests)
 5. UI Review (visual analysis with Opus + playwright)
-6. Reviews (run-reviews.sh — isolated contexts)
+6. Reviews (ralph review — isolated contexts)
 7. Final Testing (+ final UI check)
 8. Linters
 9. Cleanup
@@ -242,7 +270,7 @@ All workflows require comprehensive testing:
 
 **Key difference**: Ralph is fully autonomous - no stops, auto-commits, blocks+hold on problems.
 
-**Reviews (Phase 6)** run in isolated shell sessions via `run-reviews.sh`:
+**Reviews (Phase 6)** run in isolated sessions via `ralph review`:
 - `/ralph-review-code` — 5 agents in parallel
 - `/ralph-review-simplify` — code-simplifier
 - `/ralph-review-security` — security review
@@ -266,8 +294,8 @@ All workflows require comprehensive testing:
 ├─────────────────────────────────────────────────────────────────────┤
 │  PLANNING PHASE (Interactive)                                        │
 │  ┌────────────────┐    ┌─────────────────────┐                      │
-│  │ ralph-plan.sh  │───▶│ /ralph-plan-task    │                      │
-│  │ (loop runner)  │    │ EnterPlanMode       │◀──▶ Human           │
+│  │  ralph plan    │───▶│ /ralph-plan-task    │                      │
+│  │  (Python CLI)  │    │ EnterPlanMode       │◀──▶ Human           │
 │  └────────────────┘    │ AskUserQuestion     │     Feedback         │
 │                        │ ExitPlanMode        │                      │
 │                        └─────────────────────┘                      │
@@ -280,8 +308,8 @@ All workflows require comprehensive testing:
 ├─────────────────────────────────────────────────────────────────────┤
 │  IMPLEMENTATION PHASE (Autonomous)                                   │
 │  ┌──────────────────┐  ┌───────────────────────────┐                │
-│  │ralph-implement.sh│─▶│/ralph-implement-python-task│               │
-│  │ --print          │  │ NO AskUserQuestion        │                │
+│  │ ralph implement  │─▶│/ralph-implement-python-task│               │
+│  │ (Python CLI)     │  │ NO AskUserQuestion        │                │
 │  │ --dangerously-   │  │ NO "need feedback"        │                │
 │  │   skip-permissions│ │ Auto-commit on success    │                │
 │  └──────────────────┘  └───────────────────────────┘                │
@@ -303,7 +331,7 @@ All workflows require comprehensive testing:
 ├─────────────────────────────────────────────────────────────────────┤
 │  BATCH CHECK PHASE (after all tasks)                                 │
 │  ┌──────────────────┐  ┌───────────────────────────┐                │
-│  │ralph-implement.sh│─▶│  /ralph-batch-check       │                │
+│  │ ralph implement  │─▶│  /ralph-batch-check       │                │
 │  │ (auto after loop)│  │  - Full test suite        │                │
 │  └──────────────────┘  │  - Fix indirect issues    │                │
 │                        │  - Create check task      │                │
@@ -311,35 +339,35 @@ All workflows require comprehensive testing:
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-## Reviews Isolation (run-reviews.sh)
+## Reviews Isolation (ralph review)
 
-Reviews run in isolated Claude sessions to prevent context overflow. The workflow state must be suspended for child sessions.
+Reviews run in isolated Claude sessions to prevent context overflow. The workflow state is suspended for child sessions.
 
 ```mermaid
 sequenceDiagram
     participant P as Parent Session<br>/ralph-implement-python-task
-    participant S as run-reviews.sh
+    participant R as ralph review
     participant F as workflow-state/<br>active_ralph_task.txt
     participant C as Child Sessions
     participant H as check_workflow_ralph.py
 
-    P->>S: Phase 6: call run-reviews.sh
-    S->>F: mv active_ralph_task.txt → .bak
+    P->>R: Phase 6: call ralph review
+    R->>F: mv active_ralph_task.txt → .bak
     Note over F: State suspended
 
     loop For each review
-        S->>C: claude "/ralph-review-* project#N"
+        R->>C: claude "/ralph-review-* project#N"
         C->>H: Stop event
         H->>F: exists?
         F-->>H: NO (renamed to .bak)
         H-->>C: return 0 (allow)
         C->>C: update_task(review=...)
-        C-->>S: exit 0
+        C-->>R: exit 0
     end
 
-    S->>F: mv .bak → active_ralph_task.txt
+    R->>F: mv .bak → active_ralph_task.txt
     Note over F: State restored (trap EXIT)
-    S-->>P: return with summary table
+    R-->>P: return with summary table
     P->>P: Continue Phase 7...
 ```
 
@@ -384,13 +412,13 @@ stateDiagram-v2
     }
 ```
 
-### run-reviews.sh Output
+### ralph review Output
 
 ```
 ════════════════════════════════════════════════════════════════════════════════
   SUMMARY
 ════════════════════════════════════════════════════════════════════════════════
-🎉 All 4/4 reviews completed successfully!
+✓ All 4/4 reviews completed successfully!
 
 ┌────────────────────────┬──────────────┬───────┬─────────────┐
 │         Review         │    Status    │ Time  │  Log Size   │

@@ -1,14 +1,18 @@
 """Review command - run code reviews in isolated contexts."""
 
 import subprocess
-import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import List, NamedTuple, Optional
+from typing import List, NamedTuple
 
-from ..config import get_config
-from ..logging import Console, format_duration, console
+from rich.console import Console
+from rich.table import Table
+
+from ..config import get_settings
+from ..logging import format_duration
+
+console = Console()
 
 
 class ReviewResult(NamedTuple):
@@ -31,21 +35,14 @@ REVIEWS = [
 
 
 def run_review(task_ref: str) -> int:
-    """Run all code reviews in isolated contexts.
+    """Run all code reviews in isolated contexts."""
+    settings = get_settings()
 
-    Args:
-        task_ref: Task reference (e.g., project#1)
-
-    Returns:
-        Exit code (0 = all success, 1 = any failures)
-    """
-    config = get_config()
-
-    console.header(f"Running Reviews: {task_ref}")
+    console.rule(f"[bold blue]Running Reviews: {task_ref}[/bold blue]")
 
     # Setup logging
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_dir = config.log_dir / "reviews"
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_dir = settings.log_dir / "reviews"
     log_dir.mkdir(parents=True, exist_ok=True)
 
     # Suspend workflow state (if exists)
@@ -57,12 +54,11 @@ def run_review(task_ref: str) -> int:
         try:
             state_file.rename(state_backup)
             state_suspended = True
-            console.dim("Workflow state suspended")
+            console.print("[dim]Workflow state suspended[/dim]")
         except Exception as e:
-            console.warning(f"Could not suspend workflow state: {e}")
+            console.print(f"[yellow]Could not suspend workflow state: {e}[/yellow]")
 
     results: List[ReviewResult] = []
-    start_time = datetime.now()
 
     try:
         for review_name, skill_name in REVIEWS:
@@ -71,7 +67,7 @@ def run_review(task_ref: str) -> int:
                 review_name=review_name,
                 skill_name=skill_name,
                 log_dir=log_dir,
-                timestamp=timestamp,
+                timestamp=ts,
             )
             results.append(result)
 
@@ -80,9 +76,9 @@ def run_review(task_ref: str) -> int:
         if state_suspended and state_backup.exists():
             try:
                 state_backup.rename(state_file)
-                console.dim("Workflow state restored")
+                console.print("[dim]Workflow state restored[/dim]")
             except Exception as e:
-                console.warning(f"Could not restore workflow state: {e}")
+                console.print(f"[yellow]Could not restore workflow state: {e}[/yellow]")
 
     # Print summary
     print_review_summary(results)
@@ -100,7 +96,7 @@ def run_single_review(
     timestamp: str,
 ) -> ReviewResult:
     """Run single review and return result."""
-    console.info(f"Starting: {review_name}")
+    console.print(f"[cyan]Starting: {review_name}[/cyan]")
 
     # Build log path
     safe_name = skill_name.replace("-", "_")
@@ -135,9 +131,9 @@ def run_single_review(
         log_size = log_path.stat().st_size
 
         if success:
-            console.success(f"Completed: {review_name} ({format_duration(duration)})")
+            console.print(f"[green]✓ Completed: {review_name} ({format_duration(duration)})[/green]")
         else:
-            console.error(f"Failed: {review_name} (exit code {result.returncode})")
+            console.print(f"[red]✗ Failed: {review_name} (exit code {result.returncode})[/red]")
 
         return ReviewResult(
             name=review_name,
@@ -149,7 +145,7 @@ def run_single_review(
 
     except subprocess.TimeoutExpired:
         duration = int(time.time() - start_time)
-        console.error(f"Timeout: {review_name}")
+        console.print(f"[red]✗ Timeout: {review_name}[/red]")
         return ReviewResult(
             name=review_name,
             success=False,
@@ -160,7 +156,7 @@ def run_single_review(
 
     except Exception as e:
         duration = int(time.time() - start_time)
-        console.error(f"Error: {review_name} - {e}")
+        console.print(f"[red]✗ Error: {review_name} - {e}[/red]")
         return ReviewResult(
             name=review_name,
             success=False,
@@ -175,36 +171,29 @@ def print_review_summary(results: List[ReviewResult]):
     success_count = sum(1 for r in results if r.success)
     total = len(results)
 
-    console.header("SUMMARY")
+    console.rule("[bold blue]SUMMARY[/bold blue]")
 
     if success_count == total:
-        console.success(f"All {total}/{total} reviews completed successfully!")
+        console.print(f"[green]✓ All {total}/{total} reviews completed successfully![/green]")
     else:
-        console.warning(f"{success_count}/{total} reviews completed")
+        console.print(f"[yellow]⚠ {success_count}/{total} reviews completed[/yellow]")
 
-    # Print table
-    print()
-    print("┌" + "─" * 24 + "┬" + "─" * 14 + "┬" + "─" * 9 + "┬" + "─" * 13 + "┐")
-    print("│" + "         Review         " + "│" + "    Status    " + "│" + "  Time   " + "│" + "  Log Size   " + "│")
-    print("├" + "─" * 24 + "┼" + "─" * 14 + "┼" + "─" * 9 + "┼" + "─" * 13 + "┤")
+    # Create table
+    table = Table()
+    table.add_column("Review", style="cyan")
+    table.add_column("Status")
+    table.add_column("Time", justify="center")
+    table.add_column("Log Size", justify="right")
 
     for r in results:
-        status = "✅ Completed" if r.success else "❌ Failed"
-        time_str = format_duration(r.duration_seconds)[:5]  # MM:SS
-        size_kb = r.log_size // 1024
+        status = "[green]✓ Completed[/green]" if r.success else "[red]✗ Failed[/red]"
+        time_str = format_duration(r.duration_seconds)[:5]
+        size_kb = f"{r.log_size // 1024} KB"
+        table.add_row(r.name, status, time_str, size_kb)
 
-        name_col = r.name[:22].ljust(22)
-        status_col = status.ljust(12)
-        time_col = time_str.center(7)
-        size_col = f"{size_kb:>6} KB".center(11)
-
-        print(f"│ {name_col} │ {status_col} │ {time_col} │ {size_col} │")
-        print("├" + "─" * 24 + "┼" + "─" * 14 + "┼" + "─" * 9 + "┼" + "─" * 13 + "┤")
-
-    # Replace last separator with bottom border
-    print("\033[1A" + "└" + "─" * 24 + "┴" + "─" * 14 + "┴" + "─" * 9 + "┴" + "─" * 13 + "┘")
+    console.print(table)
 
     # Print log file paths
-    print("\nLog files:")
+    console.print("\n[dim]Log files:[/dim]")
     for r in results:
-        print(f"  {r.name}: {r.log_path}")
+        console.print(f"  {r.name}: {r.log_path}")

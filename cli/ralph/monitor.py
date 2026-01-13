@@ -16,7 +16,6 @@ from .logging import (
     RED,
     WHITE,
     YELLOW,
-    Console,
     timestamp_short,
 )
 
@@ -176,7 +175,6 @@ class StreamMonitor:
         self.session_id: Optional[str] = None
         self.model: Optional[str] = None
         self.error_type = ErrorType.COMPLETED
-        self.console = Console(output)
 
     def _write(self, text: str, timestamp: bool = True):
         """Write formatted output."""

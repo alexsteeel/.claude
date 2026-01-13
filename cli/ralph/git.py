@@ -1,21 +1,18 @@
-"""Git operations for Ralph."""
+"""Git operations using GitPython."""
 
-import subprocess
 from pathlib import Path
 from typing import Optional
 
+from git import Repo
+from git.exc import GitCommandError, InvalidGitRepositoryError
 
-def run_git(
-    args: list[str], cwd: Optional[Path] = None, check: bool = True
-) -> subprocess.CompletedProcess:
-    """Run git command and return result."""
-    return subprocess.run(
-        ["git"] + args,
-        cwd=cwd,
-        capture_output=True,
-        text=True,
-        check=check,
-    )
+
+def get_repo(working_dir: Path) -> Optional[Repo]:
+    """Get git repository for working directory."""
+    try:
+        return Repo(working_dir)
+    except InvalidGitRepositoryError:
+        return None
 
 
 def cleanup_working_dir(working_dir: Path) -> list[str]:
@@ -27,41 +24,62 @@ def cleanup_working_dir(working_dir: Path) -> list[str]:
 
     Returns list of cleaned files.
     """
+    repo = get_repo(working_dir)
+    if not repo:
+        return []
+
     cleaned = []
 
-    # Get list of modified files before cleanup
-    result = run_git(["status", "--porcelain"], cwd=working_dir, check=False)
-    if result.returncode == 0:
-        for line in result.stdout.strip().split("\n"):
-            if line:
-                # Format: "XY filename" where X=index, Y=worktree
-                cleaned.append(line[3:].strip())
+    # Get list of modified/untracked files before cleanup
+    if repo.is_dirty(untracked_files=True):
+        for item in repo.index.diff(None):
+            cleaned.append(item.a_path)
+        for item in repo.untracked_files:
+            cleaned.append(item)
 
     # Reset tracked files
-    run_git(["checkout", "--", "."], cwd=working_dir, check=False)
+    try:
+        repo.git.checkout("--", ".")
+    except GitCommandError:
+        pass
 
     # Remove untracked files
-    run_git(["clean", "-fd"], cwd=working_dir, check=False)
+    try:
+        repo.git.clean("-fd")
+    except GitCommandError:
+        pass
 
     return cleaned
 
 
 def get_uncommitted_changes(working_dir: Path) -> list[str]:
     """Return list of modified/untracked files."""
-    result = run_git(["status", "--porcelain"], cwd=working_dir, check=False)
-    if result.returncode != 0:
+    repo = get_repo(working_dir)
+    if not repo:
         return []
 
     files = []
-    for line in result.stdout.strip().split("\n"):
-        if line:
-            files.append(line[3:].strip())
-    return files
+
+    # Modified files
+    for item in repo.index.diff(None):
+        files.append(item.a_path)
+
+    # Staged files
+    for item in repo.index.diff("HEAD"):
+        files.append(item.a_path)
+
+    # Untracked files
+    files.extend(repo.untracked_files)
+
+    return list(set(files))
 
 
 def has_uncommitted_changes(working_dir: Path) -> bool:
     """Check if there are uncommitted changes."""
-    return bool(get_uncommitted_changes(working_dir))
+    repo = get_repo(working_dir)
+    if not repo:
+        return False
+    return repo.is_dirty(untracked_files=True)
 
 
 def commit_wip(working_dir: Path, task_ref: str, message: str) -> Optional[str]:
@@ -75,37 +93,61 @@ def commit_wip(working_dir: Path, task_ref: str, message: str) -> Optional[str]:
     Returns:
         Commit hash if successful, None otherwise
     """
-    if not has_uncommitted_changes(working_dir):
+    repo = get_repo(working_dir)
+    if not repo:
         return None
 
-    # Stage all changes
-    run_git(["add", "-A"], cwd=working_dir, check=False)
-
-    # Create WIP commit
-    commit_msg = f"WIP: {task_ref} - blocked: {message}"
-    result = run_git(["commit", "-m", commit_msg], cwd=working_dir, check=False)
-
-    if result.returncode != 0:
+    if not repo.is_dirty(untracked_files=True):
         return None
 
-    # Get commit hash
-    result = run_git(["rev-parse", "--short", "HEAD"], cwd=working_dir, check=False)
-    return result.stdout.strip() if result.returncode == 0 else None
+    try:
+        # Stage all changes
+        repo.git.add("-A")
+
+        # Create WIP commit
+        commit_msg = f"WIP: {task_ref} - blocked: {message}"
+        repo.index.commit(commit_msg)
+
+        # Return short hash
+        return repo.head.commit.hexsha[:7]
+    except GitCommandError:
+        return None
 
 
 def get_current_branch(working_dir: Path) -> Optional[str]:
     """Get current branch name."""
-    result = run_git(["branch", "--show-current"], cwd=working_dir, check=False)
-    return result.stdout.strip() if result.returncode == 0 else None
+    repo = get_repo(working_dir)
+    if not repo:
+        return None
+
+    try:
+        return repo.active_branch.name
+    except TypeError:
+        # Detached HEAD state
+        return None
 
 
 def create_branch(working_dir: Path, branch_name: str) -> bool:
     """Create and switch to new branch."""
-    result = run_git(["checkout", "-b", branch_name], cwd=working_dir, check=False)
-    return result.returncode == 0
+    repo = get_repo(working_dir)
+    if not repo:
+        return False
+
+    try:
+        repo.git.checkout("-b", branch_name)
+        return True
+    except GitCommandError:
+        return False
 
 
 def switch_branch(working_dir: Path, branch_name: str) -> bool:
     """Switch to existing branch."""
-    result = run_git(["checkout", branch_name], cwd=working_dir, check=False)
-    return result.returncode == 0
+    repo = get_repo(working_dir)
+    if not repo:
+        return False
+
+    try:
+        repo.git.checkout(branch_name)
+        return True
+    except GitCommandError:
+        return False

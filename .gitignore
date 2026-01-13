@@ -25,9 +25,8 @@
 # And not settings example
 !settings.example.json
 
-# And not scripts
-!scripts/
-!scripts/**
+# And not .env.example (but .env is ignored)
+!.env.example
 
 # And not cli
 !cli/

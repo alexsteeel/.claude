@@ -1,20 +1,23 @@
-"""Logging utilities for Ralph."""
+"""Logging utilities using rich."""
 
-import sys
 from datetime import datetime
 from pathlib import Path
-from typing import TextIO
+from typing import Optional, TextIO
 
-# ANSI colors
-WHITE = "\033[1;37m"
-GREEN = "\033[0;32m"
-YELLOW = "\033[1;33m"
-RED = "\033[0;31m"
-BLUE = "\033[0;34m"
-CYAN = "\033[0;36m"
-MAGENTA = "\033[0;35m"
-DIM = "\033[2m"
-NC = "\033[0m"  # Reset
+from rich.console import Console
+
+# Global console instance
+console = Console()
+
+# ANSI color codes for stream output (not using rich markup)
+NC = "\033[0m"
+RED = "\033[91m"
+GREEN = "\033[92m"
+YELLOW = "\033[93m"
+CYAN = "\033[96m"
+MAGENTA = "\033[95m"
+WHITE = "\033[97m"
+DIM = "\033[90m"
 
 
 def timestamp() -> str:
@@ -27,49 +30,11 @@ def timestamp_short() -> str:
     return datetime.now().strftime("%H:%M:%S")
 
 
-class Console:
-    """Console output with colors."""
-
-    def __init__(self, file: TextIO = sys.stdout):
-        self.file = file
-        self.use_color = file.isatty()
-
-    def _color(self, color: str, text: str) -> str:
-        if self.use_color:
-            return f"{color}{text}{NC}"
-        return text
-
-    def print(self, message: str = "", end: str = "\n"):
-        print(message, file=self.file, end=end, flush=True)
-
-    def header(self, title: str):
-        self.print(self._color(BLUE, f"\n{'═' * 60}"))
-        self.print(self._color(BLUE, f"  {title}"))
-        self.print(self._color(BLUE, f"{'═' * 60}\n"))
-
-    def subheader(self, title: str):
-        self.print(self._color(CYAN, f"\n{'─' * 60}"))
-        self.print(self._color(CYAN, f"  {title}"))
-        self.print(self._color(CYAN, f"{'─' * 60}\n"))
-
-    def success(self, message: str):
-        self.print(self._color(GREEN, f"✓ {message}"))
-
-    def error(self, message: str):
-        self.print(self._color(RED, f"✗ {message}"))
-
-    def warning(self, message: str):
-        self.print(self._color(YELLOW, f"⚠ {message}"))
-
-    def info(self, message: str):
-        self.print(self._color(CYAN, f"  {message}"))
-
-    def dim(self, message: str):
-        self.print(self._color(DIM, message))
-
-    def kv(self, key: str, value: str):
-        """Print key-value pair."""
-        self.print(f"{key}: {self._color(GREEN, value)}")
+def format_duration(seconds: int) -> str:
+    """Format duration in seconds to HH:MM:SS."""
+    hours, remainder = divmod(seconds, 3600)
+    minutes, secs = divmod(remainder, 60)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
 
 
 class SessionLog:
@@ -117,7 +82,7 @@ class TaskLog:
     def __init__(self, log_path: Path):
         self.log_path = log_path
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
-        self._file: TextIO | None = None
+        self._file: Optional[TextIO] = None
 
     def __enter__(self):
         self._file = open(self.log_path, "w")
@@ -152,14 +117,3 @@ class TaskLog:
             self._file.write(f"Result: {result}\n")
             self._file.write(f"{'═' * 60}\n")
             self._file.flush()
-
-
-def format_duration(seconds: int) -> str:
-    """Format duration in seconds to HH:MM:SS."""
-    hours, remainder = divmod(seconds, 3600)
-    minutes, secs = divmod(remainder, 60)
-    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
-
-
-# Global console instance
-console = Console()

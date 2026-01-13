@@ -1,17 +1,20 @@
 """Implement command - autonomous task implementation."""
 
-import time
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from ..config import Config, get_config
+from rich.console import Console
+
+from ..config import Settings, get_settings
 from ..errors import ErrorType
 from ..executor import TaskResult, build_prompt, expand_task_ranges, run_claude
 from ..git import cleanup_working_dir
-from ..logging import Console, SessionLog, format_duration, console
+from ..logging import SessionLog, format_duration
 from ..notify import Notifier
 from ..recovery import recovery_loop, should_recover, should_retry_fresh
+
+console = Console()
 
 
 def run_implement(
@@ -21,38 +24,32 @@ def run_implement(
     max_budget: Optional[float] = None,
     no_recovery: bool = False,
 ) -> int:
-    """Run autonomous implementation for tasks.
-
-    Args:
-        project: Project name
-        task_args: Task numbers or ranges
-        working_dir: Optional working directory
-        max_budget: Maximum budget per task
-        no_recovery: Disable automatic recovery
-
-    Returns:
-        Exit code (0 = all success, 1 = any failures)
-    """
-    config = get_config()
-    if no_recovery:
-        config.recovery_enabled = False
+    """Run autonomous implementation for tasks."""
+    settings = get_settings()
 
     tasks = expand_task_ranges(task_args)
 
     if not tasks:
-        console.error("No valid task numbers provided")
+        console.print("[red]No valid task numbers provided[/red]")
         return 1
 
     if working_dir is None:
         working_dir = Path.cwd()
 
+    # Override recovery if disabled
+    if no_recovery:
+        settings = Settings(
+            **settings.model_dump(),
+            recovery_enabled=False,
+        )
+
     notifier = Notifier()
 
     # Setup logging
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_dir = config.log_dir / "ralph-implement"
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_dir = settings.log_dir / "ralph-implement"
     log_dir.mkdir(parents=True, exist_ok=True)
-    session_log = SessionLog(log_dir / f"session_{timestamp}.log")
+    session_log = SessionLog(log_dir / f"session_{ts}.log")
 
     session_log.write_header(
         "RALPH IMPLEMENTATION SESSION",
@@ -63,10 +60,10 @@ def run_implement(
         Recovery="disabled" if no_recovery else "enabled",
     )
 
-    console.header(f"Ralph Implementation: {project}")
-    console.kv("Tasks", ", ".join(str(t) for t in tasks))
-    console.kv("Working directory", str(working_dir))
-    console.kv("Recovery", "disabled" if no_recovery else "enabled")
+    console.rule(f"[bold blue]Ralph Implementation: {project}[/bold blue]")
+    console.print(f"Tasks: [green]{', '.join(str(t) for t in tasks)}[/green]")
+    console.print(f"Working directory: [green]{working_dir}[/green]")
+    console.print(f"Recovery: [green]{'disabled' if no_recovery else 'enabled'}[/green]")
 
     # Notify session start
     notifier.session_start(project, tasks)
@@ -83,20 +80,20 @@ def run_implement(
             break
 
         task_ref = f"{project}#{task_num}"
-        console.subheader(f"Task: {task_ref}")
+        console.rule(f"[cyan]Task: {task_ref}[/cyan]")
         session_log.append(f"Starting: {task_ref}")
 
         # Cleanup before task
         cleaned = cleanup_working_dir(working_dir)
         if cleaned:
-            console.dim(f"Cleaned {len(cleaned)} files")
+            console.print(f"[dim]Cleaned {len(cleaned)} files[/dim]")
             session_log.append(f"Cleaned {len(cleaned)} files")
 
         result = execute_task_with_recovery(
             task_ref=task_ref,
             working_dir=working_dir,
             log_dir=log_dir,
-            config=config,
+            settings=settings,
             notifier=notifier,
             max_budget=max_budget,
             session_log=session_log,
@@ -105,17 +102,16 @@ def run_implement(
         task_durations[task_num] = format_duration(result.duration_seconds)
 
         if result.error_type.is_success:
-            console.success(f"Completed: {task_ref} ({task_durations[task_num]})")
+            console.print(f"[green]✓ Completed: {task_ref} ({task_durations[task_num]})[/green]")
             session_log.append(f"Completed: {task_ref}")
             completed.append(task_num)
 
         elif result.error_type == ErrorType.ON_HOLD:
-            console.warning(f"On hold: {task_ref}")
+            console.print(f"[yellow]⚠ On hold: {task_ref}[/yellow]")
             session_log.append(f"On hold: {task_ref}")
-            # Continue to next task (don't add to failed)
 
         elif result.error_type.is_fatal:
-            console.error(f"Fatal error: {task_ref} - {result.error_type.value}")
+            console.print(f"[red]✗ Fatal error: {task_ref} - {result.error_type.value}[/red]")
             session_log.append(f"Fatal error: {task_ref} - {result.error_type.value}")
             failed.append(task_num)
             failed_reasons.append(result.error_type.value)
@@ -123,7 +119,7 @@ def run_implement(
             notifier.pipeline_stopped(result.error_type.value)
 
         else:
-            console.error(f"Failed: {task_ref} - {result.error_type.value}")
+            console.print(f"[red]✗ Failed: {task_ref} - {result.error_type.value}[/red]")
             session_log.append(f"Failed: {task_ref} - {result.error_type.value}")
             failed.append(task_num)
             failed_reasons.append(result.error_type.value)
@@ -137,10 +133,10 @@ def run_implement(
         Failed=[f"{t} ({failed_reasons[i]})" for i, t in enumerate(failed)],
     )
 
-    console.header("Session Complete")
-    console.kv("Duration", duration)
-    console.kv("Completed", str(len(completed)))
-    console.kv("Failed", str(len(failed)))
+    console.rule("[bold blue]Session Complete[/bold blue]")
+    console.print(f"Duration: [green]{duration}[/green]")
+    console.print(f"Completed: [green]{len(completed)}[/green]")
+    console.print(f"Failed: [red]{len(failed)}[/red]")
 
     # Notify session complete
     notifier.session_complete(
@@ -163,19 +159,19 @@ def execute_task_with_recovery(
     task_ref: str,
     working_dir: Path,
     log_dir: Path,
-    config: Config,
+    settings: Settings,
     notifier: Notifier,
     max_budget: Optional[float],
     session_log: SessionLog,
 ) -> TaskResult:
     """Execute single task with recovery loop."""
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     context_overflow_attempts = 0
     resume_session: Optional[str] = None
     recovery_note: Optional[str] = None
 
     while True:
-        log_path = log_dir / f"{task_ref.replace('#', '_')}_{timestamp}.log"
+        log_path = log_dir / f"{task_ref.replace('#', '_')}_{ts}.log"
 
         prompt = build_prompt(
             skill="ralph-implement-python-task",
@@ -196,38 +192,40 @@ def execute_task_with_recovery(
             return result
 
         # Context overflow - retry with fresh session
-        if should_retry_fresh(result.error_type, context_overflow_attempts, config):
+        if should_retry_fresh(result.error_type, context_overflow_attempts, settings):
             context_overflow_attempts += 1
-            notifier.context_overflow(task_ref, context_overflow_attempts, config.context_overflow_max_retries)
-            session_log.append(
-                f"Context overflow retry {context_overflow_attempts}/{config.context_overflow_max_retries}"
+            notifier.context_overflow(
+                task_ref, context_overflow_attempts, settings.context_overflow_max_retries
             )
-            console.warning(
-                f"Context overflow - retry {context_overflow_attempts}/{config.context_overflow_max_retries}"
+            session_log.append(
+                f"Context overflow retry {context_overflow_attempts}/{settings.context_overflow_max_retries}"
+            )
+            console.print(
+                f"[yellow]Context overflow - retry {context_overflow_attempts}/{settings.context_overflow_max_retries}[/yellow]"
             )
             recovery_note = (
                 f"Previous attempt failed with context overflow. "
-                f"This is retry {context_overflow_attempts}/{config.context_overflow_max_retries}. "
+                f"This is retry {context_overflow_attempts}/{settings.context_overflow_max_retries}. "
                 f"Focus on essential changes only."
             )
-            resume_session = None  # Fresh session
+            resume_session = None
             continue
 
         # Recoverable error - wait and retry
-        if should_recover(result.error_type, config):
-            console.warning(f"API error: {result.error_type.value} - starting recovery")
+        if should_recover(result.error_type, settings):
+            console.print(f"[yellow]API error: {result.error_type.value} - starting recovery[/yellow]")
             session_log.append(f"Recovery started for {result.error_type.value}")
 
             def on_attempt(attempt: int, max_attempts: int, delay: int):
                 notifier.recovery_start(attempt, max_attempts, delay)
-                console.info(f"Recovery attempt {attempt}/{max_attempts} in {delay // 60} min")
+                console.print(f"[cyan]Recovery attempt {attempt}/{max_attempts} in {delay // 60} min[/cyan]")
 
             def on_recovered():
                 notifier.recovery_success(task_ref)
-                console.success("API recovered")
+                console.print("[green]✓ API recovered[/green]")
 
             recovered = recovery_loop(
-                config=config,
+                settings=settings,
                 on_attempt=on_attempt,
                 on_recovered=on_recovered,
             )
@@ -242,7 +240,7 @@ def execute_task_with_recovery(
                 continue
             else:
                 session_log.append("Recovery failed - all attempts exhausted")
-                console.error("Recovery failed - all attempts exhausted")
+                console.print("[red]Recovery failed - all attempts exhausted[/red]")
                 return result
 
         # Non-recoverable error
@@ -258,11 +256,11 @@ def run_batch_check(
     """Run batch check after all tasks complete."""
     import subprocess
 
-    console.subheader("Running batch check")
+    console.rule("[cyan]Running batch check[/cyan]")
 
     task_refs = " ".join(f"{project}#{t}" for t in completed_tasks)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_path = log_dir / f"batch_check_{timestamp}.log"
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_path = log_dir / f"batch_check_{ts}.log"
 
     cmd = [
         "claude",
@@ -295,7 +293,7 @@ def run_batch_check(
             process.wait()
             monitor.print_summary()
 
-        console.success("Batch check complete")
+        console.print("[green]✓ Batch check complete[/green]")
 
     except Exception as e:
-        console.error(f"Batch check failed: {e}")
+        console.print(f"[red]✗ Batch check failed: {e}[/red]")

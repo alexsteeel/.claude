@@ -9,7 +9,9 @@ description = "Ralph - Autonomous task execution CLI"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "typer>=0.9.0",
+    "typer[all]>=0.9.0",
+    "pydantic-settings>=2.0.0",
+    "gitpython>=3.1.0",
 ]
 
 [project.optional-dependencies]

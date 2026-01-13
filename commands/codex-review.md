@@ -46,9 +46,6 @@ which codex || { echo "ERROR: codex not found"; exit 1; }
 REVIEW_DIR="/tmp/code-review-$(date +%s)"
 mkdir -p "$REVIEW_DIR"
 
-# Установи NODE_OPTIONS для увеличения лимита памяти (fix OOM)
-export NODE_OPTIONS="--max-old-space-size=8192"
-
 # Запусти codex review с gpt-5-codex и high reasoning effort (inline profile)
 codex review \
   -c 'profiles.review.model="gpt-5-codex"' \
@@ -316,7 +313,6 @@ Codex указал на проблему в файле X:
 
 ```bash
 ITERATION=2
-export NODE_OPTIONS="--max-old-space-size=8192"
 codex review \
   -c 'profiles.review.model="gpt-5-codex"' \
   -c 'profiles.review.model_reasoning_effort="high"' \
