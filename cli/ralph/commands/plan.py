@@ -35,7 +35,9 @@ def run_plan(
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     log_dir = settings.log_dir / "ralph-plan"
     log_dir.mkdir(parents=True, exist_ok=True)
-    session_log = SessionLog(log_dir / f"session_{ts}.log")
+    # Include project and task range in log name for easy identification
+    task_range = f"{tasks[0]}" if len(tasks) == 1 else f"{tasks[0]}-{tasks[-1]}"
+    session_log = SessionLog(log_dir / f"{project}_{task_range}_{ts}.log")
 
     session_log.write_header(
         "RALPH PLANNING SESSION",

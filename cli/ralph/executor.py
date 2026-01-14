@@ -119,11 +119,18 @@ def run_claude(
 
     start_time = time.time()
 
-    with TaskLog(log_path) as task_log:
+    # Raw JSON log path (same name with .json extension)
+    raw_json_path = log_path.with_suffix(".json")
+
+    with TaskLog(log_path) as task_log, open(raw_json_path, "w") as raw_json_file:
         task_log.write_header(task_ref)
 
         # Create monitor with both output and log file
-        monitor = StreamMonitor(output=output, log_file=task_log._file)
+        monitor = StreamMonitor(
+            output=output,
+            log_file=task_log._file,
+            raw_json_file=raw_json_file,
+        )
 
         # Run process
         process = subprocess.Popen(

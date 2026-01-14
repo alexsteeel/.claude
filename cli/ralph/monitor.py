@@ -168,13 +168,23 @@ def _format_tool(name: str, input_data: dict) -> str:
 class StreamMonitor:
     """Monitor and format Claude JSON stream output."""
 
-    def __init__(self, output: TextIO = sys.stdout, log_file: Optional[TextIO] = None):
+    # Confirmation phrase that marks successful task completion
+    CONFIRMATION_PHRASE = "I confirm that all task phases are fully completed"
+
+    def __init__(
+        self,
+        output: TextIO = sys.stdout,
+        log_file: Optional[TextIO] = None,
+        raw_json_file: Optional[TextIO] = None,
+    ):
         self.output = output
         self.log_file = log_file
+        self.raw_json_file = raw_json_file  # For saving unprocessed JSON lines
         self.stats = SessionStats()
         self.session_id: Optional[str] = None
         self.model: Optional[str] = None
         self.error_type = ErrorType.COMPLETED
+        self.confirmed = False  # True if confirmation phrase was found
 
     def _write(self, text: str, timestamp: bool = True):
         """Write formatted output."""
@@ -216,10 +226,26 @@ class StreamMonitor:
         output_t = self.stats.output_tokens
 
         if data.get("is_error") or data.get("subtype") == "error_during_execution":
-            self.error_type, detail = classify_from_json(data)
-            self._write(
-                f"{RED}❌ ERROR: {self.error_type.value} | {detail} | Tokens: {input_t} in / {output_t} out{NC}"
-            )
+            error_type, detail = classify_from_json(data)
+            # Log raw error data for diagnostics
+            raw_error = {
+                "result": data.get("result"),
+                "error_code": data.get("error_code"),
+                "errors": data.get("errors"),
+            }
+            # If confirmation phrase was found, treat as success despite error
+            if self.confirmed:
+                self._write(
+                    f"{YELLOW}⚠ Post-completion error ignored: {detail} | Tokens: {input_t} in / {output_t} out{NC}"
+                )
+                self._write(f"{DIM}  Raw error: {raw_error}{NC}")
+                # Keep error_type as COMPLETED
+            else:
+                self.error_type = error_type
+                self._write(
+                    f"{RED}❌ ERROR: {self.error_type.value} | {detail} | Tokens: {input_t} in / {output_t} out{NC}"
+                )
+                self._write(f"{DIM}  Raw error: {raw_error}{NC}")
         else:
             self._write(f"{MAGENTA}📊 {input_t:,} in / {output_t:,} out | ${cost:.4f}{NC}")
 
@@ -233,6 +259,9 @@ class StreamMonitor:
                 text = item.get("text", "").strip()
                 if text:
                     self._write(f"{WHITE}{text}{NC}")
+                    # Check for confirmation phrase
+                    if self.CONFIRMATION_PHRASE in text:
+                        self.confirmed = True
             elif item.get("type") == "tool_use":
                 self.stats.tool_calls += 1
                 name = item.get("name", "")
@@ -241,6 +270,11 @@ class StreamMonitor:
 
     def process_line(self, line: str):
         """Process a single JSON line."""
+        # Save raw JSON for diagnostics
+        if self.raw_json_file:
+            self.raw_json_file.write(line + "\n")
+            self.raw_json_file.flush()
+
         try:
             data = json.loads(line)
         except json.JSONDecodeError:

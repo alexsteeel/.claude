@@ -10,10 +10,14 @@ from .commands.logs import LogType, complete_log_files
 app = typer.Typer(
     help="Ralph - Autonomous task execution CLI",
     no_args_is_help=True,
+    context_settings={"help_option_names": ["-h", "--help"]},
 )
 
 # Logs sub-application
-logs_app = typer.Typer(help="View and manage log files")
+logs_app = typer.Typer(
+    help="View and manage log files",
+    context_settings={"help_option_names": ["-h", "--help"]},
+)
 app.add_typer(logs_app, name="logs")
 
 
