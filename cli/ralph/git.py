@@ -18,6 +18,27 @@ def get_repo(working_dir: Path) -> Optional[Repo]:
         return None
 
 
+def get_files_to_clean(working_dir: Path) -> tuple[list[str], list[str]]:
+    """Get list of files that would be cleaned.
+
+    Returns:
+        Tuple of (modified_files, untracked_files).
+    """
+    repo = get_repo(working_dir)
+    if not repo:
+        return [], []
+
+    modified = []
+    untracked = []
+
+    if repo.is_dirty(untracked_files=True):
+        for item in repo.index.diff(None):
+            modified.append(item.a_path)
+        untracked = list(repo.untracked_files)
+
+    return modified, untracked
+
+
 def cleanup_working_dir(working_dir: Path) -> list[str]:
     """Reset working directory to clean state.
 
@@ -31,14 +52,8 @@ def cleanup_working_dir(working_dir: Path) -> list[str]:
     if not repo:
         return []
 
-    cleaned = []
-
-    # Get list of modified/untracked files before cleanup
-    if repo.is_dirty(untracked_files=True):
-        for item in repo.index.diff(None):
-            cleaned.append(item.a_path)
-        for item in repo.untracked_files:
-            cleaned.append(item)
+    modified, untracked = get_files_to_clean(working_dir)
+    cleaned = modified + untracked
 
     # Reset tracked files
     try:

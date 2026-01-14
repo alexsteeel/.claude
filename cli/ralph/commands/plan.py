@@ -6,10 +6,11 @@ from pathlib import Path
 from typing import Optional
 
 from rich.console import Console
+from rich.prompt import Confirm
 
 from ..config import get_settings
 from ..executor import expand_task_ranges
-from ..git import cleanup_working_dir
+from ..git import cleanup_working_dir, get_current_branch, get_files_to_clean
 from ..logging import SessionLog, format_duration
 
 console = Console()
@@ -50,6 +51,15 @@ def run_plan(
     console.print(f"Tasks: [green]{', '.join(str(t) for t in tasks)}[/green]")
     console.print(f"Working directory: [green]{working_dir}[/green]")
 
+    # Check if on protected branch
+    current_branch = get_current_branch(working_dir)
+    if current_branch in ("master", "main"):
+        console.print(f"\n[bold red]Warning: You are on '{current_branch}' branch![/bold red]")
+        if not Confirm.ask("[yellow]Are you sure you want to continue?[/yellow]", default=False):
+            console.print("[yellow]Pipeline stopped.[/yellow]")
+            session_log.append(f"Pipeline stopped: user declined to continue on {current_branch}")
+            return 1
+
     completed = []
     failed = []
     start_time = datetime.now()
@@ -59,9 +69,33 @@ def run_plan(
         console.rule(f"[cyan]Planning: {task_ref}[/cyan]")
         session_log.append(f"Starting: {task_ref}")
 
-        # Cleanup before task
-        cleaned = cleanup_working_dir(working_dir)
-        if cleaned:
+        # Check for uncommitted changes
+        modified, untracked = get_files_to_clean(working_dir)
+        if modified or untracked:
+            total = len(modified) + len(untracked)
+            console.print(f"\n[yellow]Found {total} uncommitted files:[/yellow]")
+
+            if modified:
+                console.print("[red]Modified:[/red]")
+                for f in modified:
+                    console.print(f"  [red]M[/red] {f}")
+
+            if untracked:
+                console.print("[green]Untracked:[/green]")
+                for f in untracked:
+                    console.print(f"  [green]?[/green] {f}")
+
+            console.print()
+            if not Confirm.ask("[yellow]Delete these files?[/yellow]", default=False):
+                console.print(
+                    "\n[red]Pipeline stopped.[/red]\n"
+                    "[yellow]Commit or stash your changes before running ralph plan.[/yellow]"
+                )
+                session_log.append("Pipeline stopped: uncommitted changes not confirmed for deletion")
+                return 1
+
+            # Cleanup confirmed
+            cleaned = cleanup_working_dir(working_dir)
             console.print(f"[dim]Cleaned {len(cleaned)} files[/dim]")
             session_log.append(f"Cleaned {len(cleaned)} files")
 
