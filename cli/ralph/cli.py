@@ -71,6 +71,20 @@ def health(
     raise typer.Exit(run_health(verbose))
 
 
+@app.command()
+def notify(
+    message: Optional[str] = typer.Argument(None, help="Message to send"),
+    test: bool = typer.Option(False, "-t", "--test", help="Send test message"),
+):
+    """Send notification to Telegram."""
+    from .commands.notify import run_notify
+
+    if not message and not test:
+        raise typer.BadParameter("Provide a message or use --test")
+
+    raise typer.Exit(run_notify(message or "", test))
+
+
 # ============================================================================
 # Logs subcommands
 # ============================================================================

@@ -123,6 +123,7 @@ def run_single_review(
         with open(log_path, "w") as log_file:
             result = subprocess.run(
                 cmd,
+                stdin=subprocess.DEVNULL,  # Prevent hang when running from another Claude session
                 stdout=log_file,
                 stderr=subprocess.STDOUT,
                 timeout=settings.review_timeout,

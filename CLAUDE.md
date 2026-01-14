@@ -54,6 +54,10 @@ ralph logs view <file>              # View with highlighting
 ralph logs view <file> --vim        # Open in vim
 ralph logs tail <file>              # Real-time (tail -f)
 ralph logs clean                    # Cleanup old logs
+
+# Telegram notifications
+ralph notify "Message text"         # Send message
+ralph notify -t                     # Send test message
 ```
 
 ### Task Number Ranges

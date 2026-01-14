@@ -20,7 +20,8 @@
       "Bash(pytest tests/ -v:*)",
       "Bash(ralph health:*)",
       "Bash(ralph logs:*)",
-      "Bash(pytest:*)"
+      "Bash(pytest:*)",
+      "Bash(ralph notify --help:*)"
     ]
   }
 }
