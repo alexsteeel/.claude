@@ -10,11 +10,13 @@ description: Create a commit following repository style
 1. **Анализ стиля коммитов**
    ```bash
    git log --oneline -10
+   git log -5 --format="%B---"
    ```
    Определи:
    - Язык (English/Russian)
    - Формат (conventional commits, plain, etc.)
    - Стиль глаголов (imperative, past tense)
+   - Наличие Co-Authored-By (добавляй ТОЛЬКО если используется в репозитории)
 
 2. **Просмотр изменений**
    ```bash
@@ -30,28 +32,14 @@ description: Create a commit following repository style
 
 4. **Создание коммита**
    - Сообщение в стиле репозитория
-   - Используй HEREDOC для форматирования:
+   - Co-Authored-By добавляй ТОЛЬКО если он есть в предыдущих коммитах
+   - Используй HEREDOC для многострочных сообщений:
    ```bash
    git commit -m "$(cat <<'EOF'
-   Commit message here.
-
-   Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+   Commit message here
    EOF
    )"
    ```
-
-## Стиль этого репозитория
-
-На основе истории:
-- **Язык**: English
-- **Формат**: Plain (без префиксов feat:/fix:)
-- **Глаголы**: Imperative (Add, Fix, Improve, Update, Refactor)
-- **Длина**: Короткие, 50-72 символа
-
-Примеры:
-- `Add safety checks to ralph plan`
-- `Improve error handling and logging in ralph`
-- `Fix ralph review hang, add notify command`
 
 ## Результат
 
