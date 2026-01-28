@@ -49,10 +49,10 @@ TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 TASK_SAFE=$(echo "{{task_ref}}" | tr '#' '_')
 LOG_FILE="${REVIEW_DIR}/${TASK_SAFE}_codex-review_${TIMESTAMP}.log"
 
-# Запусти codex review с gpt-5-codex и high reasoning effort (inline profile)
+# Запусти codex review с gpt-5.2-codex и xhigh reasoning effort (inline profile)
 codex review \
-  -c 'profiles.review.model="gpt-5-codex"' \
-  -c 'profiles.review.model_reasoning_effort="high"' \
+  -c 'profiles.review.model="gpt-5.2-codex"' \
+  -c 'profiles.review.model_reasoning_effort="xhigh"' \
   -c 'profile="review"' \
   "
 Ты выполняешь код-ревью для задачи {{task_ref}}.
@@ -317,8 +317,8 @@ Codex указал на проблему в файле X:
 ```bash
 ITERATION=2
 codex review \
-  -c 'profiles.review.model="gpt-5-codex"' \
-  -c 'profiles.review.model_reasoning_effort="high"' \
+  -c 'profiles.review.model="gpt-5.2-codex"' \
+  -c 'profiles.review.model_reasoning_effort="xhigh"' \
   -c 'profile="review"' \
   "
 Это повторная проверка после исправлений (итерация $ITERATION) для задачи {{task_ref}}.
