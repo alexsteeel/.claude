@@ -9,6 +9,14 @@ from git.exc import GitCommandError, InvalidGitRepositoryError
 
 logger = logging.getLogger(__name__)
 
+# Directories to exclude from cleanup checks
+EXCLUDE_PATTERNS = [".claude/"]
+
+
+def _is_excluded(path: str) -> bool:
+    """Check if path should be excluded from cleanup."""
+    return any(path.startswith(pattern) for pattern in EXCLUDE_PATTERNS)
+
 
 def get_repo(working_dir: Path) -> Optional[Repo]:
     """Get git repository for working directory."""
@@ -20,6 +28,8 @@ def get_repo(working_dir: Path) -> Optional[Repo]:
 
 def get_files_to_clean(working_dir: Path) -> tuple[list[str], list[str]]:
     """Get list of files that would be cleaned.
+
+    Excludes files in EXCLUDE_PATTERNS (e.g., .claude/).
 
     Returns:
         Tuple of (modified_files, untracked_files).
@@ -33,8 +43,9 @@ def get_files_to_clean(working_dir: Path) -> tuple[list[str], list[str]]:
 
     if repo.is_dirty(untracked_files=True):
         for item in repo.index.diff(None):
-            modified.append(item.a_path)
-        untracked = list(repo.untracked_files)
+            if not _is_excluded(item.a_path):
+                modified.append(item.a_path)
+        untracked = [f for f in repo.untracked_files if not _is_excluded(f)]
 
     return modified, untracked
 
@@ -42,9 +53,11 @@ def get_files_to_clean(working_dir: Path) -> tuple[list[str], list[str]]:
 def cleanup_working_dir(working_dir: Path) -> list[str]:
     """Reset working directory to clean state.
 
+    Excludes files in EXCLUDE_PATTERNS (e.g., .claude/).
+
     Runs:
-        git checkout -- .
-        git clean -fd
+        git checkout -- . (excluding patterns)
+        git clean -fd --exclude=<patterns>
 
     Returns list of cleaned files.
     """
@@ -55,15 +68,17 @@ def cleanup_working_dir(working_dir: Path) -> list[str]:
     modified, untracked = get_files_to_clean(working_dir)
     cleaned = modified + untracked
 
-    # Reset tracked files
-    try:
-        repo.git.checkout("--", ".")
-    except GitCommandError as e:
-        logger.debug("git checkout failed: %s", e)
+    # Reset tracked files (only non-excluded)
+    for filepath in modified:
+        try:
+            repo.git.checkout("--", filepath)
+        except GitCommandError as e:
+            logger.debug("git checkout %s failed: %s", filepath, e)
 
-    # Remove untracked files
+    # Remove untracked files (excluding patterns)
     try:
-        repo.git.clean("-fd")
+        exclude_args = [f"--exclude={p}" for p in EXCLUDE_PATTERNS]
+        repo.git.clean("-fd", *exclude_args)
     except GitCommandError as e:
         logger.debug("git clean failed: %s", e)
 
@@ -71,7 +86,10 @@ def cleanup_working_dir(working_dir: Path) -> list[str]:
 
 
 def get_uncommitted_changes(working_dir: Path) -> list[str]:
-    """Return list of modified/untracked files."""
+    """Return list of modified/untracked files.
+
+    Excludes files in EXCLUDE_PATTERNS (e.g., .claude/).
+    """
     repo = get_repo(working_dir)
     if not repo:
         return []
@@ -80,24 +98,28 @@ def get_uncommitted_changes(working_dir: Path) -> list[str]:
 
     # Modified files
     for item in repo.index.diff(None):
-        files.append(item.a_path)
+        if not _is_excluded(item.a_path):
+            files.append(item.a_path)
 
     # Staged files
     for item in repo.index.diff("HEAD"):
-        files.append(item.a_path)
+        if not _is_excluded(item.a_path):
+            files.append(item.a_path)
 
     # Untracked files
-    files.extend(repo.untracked_files)
+    for f in repo.untracked_files:
+        if not _is_excluded(f):
+            files.append(f)
 
     return list(set(files))
 
 
 def has_uncommitted_changes(working_dir: Path) -> bool:
-    """Check if there are uncommitted changes."""
-    repo = get_repo(working_dir)
-    if not repo:
-        return False
-    return repo.is_dirty(untracked_files=True)
+    """Check if there are uncommitted changes.
+
+    Excludes files in EXCLUDE_PATTERNS (e.g., .claude/).
+    """
+    return bool(get_uncommitted_changes(working_dir))
 
 
 def commit_wip(working_dir: Path, task_ref: str, message: str) -> Optional[str]:
