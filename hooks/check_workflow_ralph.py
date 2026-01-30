@@ -9,6 +9,7 @@ Differences from check_workflow.py:
 """
 
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -283,6 +284,10 @@ If blocked, commit WIP changes, record issue in ## Blocks and set status='hold'.
 
 
 def main():
+    # Only activate when WORKSPACE env var is set
+    if not os.environ.get("WORKSPACE"):
+        return 0
+
     try:
         input_data = sys.stdin.read()
         if not input_data:

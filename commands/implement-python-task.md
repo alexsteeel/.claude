@@ -804,39 +804,19 @@ update_task(
 
 **После подтверждения пользователь сам переводит задачу в "human approved".**
 
-### Шаг 6: Выведи информацию для коммита
+### Шаг 6: Создай коммит
+
+**Используй команду `/commit`** для создания коммита в стиле репозитория:
+
 ```
-📝 Коммит:
-
-<Одно-два предложения по сути изменений>
-
-📁 Файлы:
-- path/to/file1.py
-- path/to/file2.py
-- ...
+Skill(skill="commit")
 ```
 
-Формат текста коммита:
-- Начинай с глагола: Add, Fix, Update, Remove, Refactor
-- Без точки в конце
-- Без emoji, без Co-Authored-By
-- Примеры:
-  - `Add attendance export to Excel`
-  - `Fix camera auto-reconnect on connection loss`
-  - `Update employee validation rules`
-
-### Git Configuration Tips
-
-Если git требует идентификацию автора — используй данные из предыдущего коммита:
-
-```bash
-# Получить имя и email из последнего коммита
-git log -1 --format='%an <%ae>'
-
-# Настроить git
-git config user.name "имя из предыдущего коммита"
-git config user.email "email из предыдущего коммита"
-```
+Команда автоматически:
+- Проанализирует стиль коммитов в репозитории
+- Добавит изменённые файлы (без .env и credentials)
+- Создаст коммит с правильным форматом сообщения
+- Добавит Co-Authored-By если используется в репо
 
 ## Checklist
 

@@ -7,6 +7,7 @@ Blocks stop until Claude confirms completion with specific phrase.
 """
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -157,6 +158,10 @@ def handle_stop(hook_input: dict):
 
 
 def main():
+    # Only activate when WORKSPACE env var is set
+    if not os.environ.get("WORKSPACE"):
+        return 0
+
     try:
         input_data = sys.stdin.read()
         if not input_data:

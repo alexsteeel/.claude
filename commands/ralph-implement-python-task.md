@@ -832,32 +832,17 @@ chmod 755 path/to/script.sh
 
 ### Шаг 1: Создай коммит
 
-**Автоматически создай коммит** с изменениями:
+**Используй команду `/commit`** для создания коммита в стиле репозитория:
 
-```bash
-# 1. Проверь что есть изменения
-git status --porcelain
-
-# 2. Добавь изменённые файлы
-git add -A
-
-# 3. Создай коммит
-git commit -m "<Commit message>"
+```
+Skill(skill="commit")
 ```
 
-**Формат commit message:**
-- Начинай с глагола: Add, Fix, Update, Remove, Refactor
-- Без точки в конце
-- Примеры:
-  - `Add attendance export to Excel`
-  - `Fix camera auto-reconnect on connection loss`
-  - `Update employee validation rules`
-
-**Git Configuration** (если требуется):
-```bash
-git config user.name "$(git log -1 --format='%an')"
-git config user.email "$(git log -1 --format='%ae')"
-```
+Команда автоматически:
+- Проанализирует стиль коммитов в репозитории
+- Добавит изменённые файлы (без .env и credentials)
+- Создаст коммит с правильным форматом сообщения
+- Добавит Co-Authored-By если используется в репо
 
 ### Шаг 2: CONFIRMATION PHRASE (ОБЯЗАТЕЛЬНО ПЕРЕД update_task!)
 
