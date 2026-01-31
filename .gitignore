@@ -1,6 +1,15 @@
 # Ignore everything
 *
 
+# Python build artifacts (always ignore, even in allowed dirs)
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+build/
+dist/
+*.eggs/
+
 # But not these directories
 !commands/
 !commands/**
