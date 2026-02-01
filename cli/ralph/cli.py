@@ -22,6 +22,20 @@ app.add_typer(logs_app, name="logs")
 
 
 @app.command()
+def interview(
+    project: str = typer.Argument(..., help="Project name"),
+    tasks: list[str] = typer.Argument(..., help="Task numbers or ranges (e.g., 1-4 6 8-10)"),
+    working_dir: Optional[Path] = typer.Option(
+        None, "-w", "--working-dir", help="Working directory"
+    ),
+):
+    """Deep interview to create detailed task specifications."""
+    from .commands.interview import run_interview
+
+    raise typer.Exit(run_interview(project, tasks, working_dir))
+
+
+@app.command()
 def plan(
     project: str = typer.Argument(..., help="Project name"),
     tasks: list[str] = typer.Argument(..., help="Task numbers or ranges (e.g., 1-4 6 8-10)"),

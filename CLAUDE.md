@@ -30,6 +30,10 @@ pip install -e .
 ### Commands
 
 ```bash
+# Deep interview for detailed spec
+ralph interview <project> <tasks...>
+ralph interview myproject 1
+
 # Interactive planning
 ralph plan <project> <tasks...>
 ralph plan myproject 1-4 6 8-10
@@ -128,6 +132,7 @@ This ensures each task starts with a clean codebase.
 | Command | Description |
 |---------|-------------|
 | `/execute-python-task` | Full workflow: planning → approval → implementation → testing |
+| `/ralph-interview-task project#N` | Deep interview to create detailed spec |
 | `/ralph-plan-task project#N` | Planning only with human interaction (universal) |
 | `/ralph-implement-python-task project#N` | Autonomous implementation (requires plan) |
 | `/ralph-batch-check project#1 project#2...` | Run full test suite after batch, fix indirect issues |
