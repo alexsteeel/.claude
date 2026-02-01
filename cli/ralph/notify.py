@@ -12,9 +12,12 @@ from .config import get_settings
 def escape_markdown(text: str) -> str:
     """Escape special characters for Telegram Markdown.
 
-    Escapes underscores which cause issues with error codes like API_TIMEOUT.
+    Escapes all Markdown special characters to prevent parse errors.
     """
-    return text.replace("_", "\\_")
+    # Order matters: escape backslash first
+    for char in ["\\", "_", "*", "[", "]", "(", ")", "~", "`", ">", "#", "+", "-", "=", "|", "{", "}", ".", "!"]:
+        text = text.replace(char, f"\\{char}")
+    return text
 
 
 def send_telegram(token: str, chat_id: str, message: str) -> bool:
@@ -79,7 +82,7 @@ class Notifier:
 
         message = f"""🚀 *RALPH STARTED*
 
-*Project:* {project}
+*Project:* {escape_markdown(project)}
 *Tasks:* {len(tasks)} ({task_str})
 *Time:* {datetime.now().strftime('%H:%M')}"""
         return self._send(message)
@@ -123,7 +126,7 @@ Resuming task {task_ref}"""
         lines = [
             "📊 *RALPH SESSION COMPLETE*",
             "",
-            f"*Project:* {project}",
+            f"*Project:* {escape_markdown(project)}",
             f"*Duration:* {duration}",
         ]
 
