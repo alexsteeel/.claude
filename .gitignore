@@ -40,3 +40,7 @@ dist/
 # And not cli
 !cli/
 !cli/**
+
+# Ignore these in allowed directories (must be after ! rules)
+**/__pycache__/
+.claude/settings.local.json
