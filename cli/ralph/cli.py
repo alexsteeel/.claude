@@ -7,6 +7,29 @@ import typer
 
 from .commands.logs import LogType, complete_log_files
 
+
+def validate_project_name(value: str) -> str:
+    """Validate project name is not numeric-only."""
+    if value.isdigit():
+        raise typer.BadParameter(
+            f"Project name '{value}' cannot be numeric-only. "
+            f"Did you forget the project name? Example: ralph plan myproject {value}"
+        )
+    return value
+
+
+def validate_task_numbers(values: list[str]) -> list[str]:
+    """Validate task numbers/ranges contain only digits and dashes."""
+    for v in values:
+        # Allow ranges like "1-4" and single numbers like "6"
+        clean = v.replace("-", "")
+        if not clean.isdigit():
+            raise typer.BadParameter(
+                f"Task '{v}' is invalid. Tasks must be numbers or ranges (e.g., 1 2-5 8)."
+            )
+    return values
+
+
 app = typer.Typer(
     help="Ralph - Autonomous task execution CLI",
     no_args_is_help=True,
@@ -23,8 +46,8 @@ app.add_typer(logs_app, name="logs")
 
 @app.command()
 def interview(
-    project: str = typer.Argument(..., help="Project name"),
-    tasks: list[str] = typer.Argument(..., help="Task numbers or ranges (e.g., 1-4 6 8-10)"),
+    project: Annotated[str, typer.Argument(help="Project name", callback=validate_project_name)],
+    tasks: Annotated[list[str], typer.Argument(help="Task numbers or ranges (e.g., 1-4 6 8-10)", callback=validate_task_numbers)],
     working_dir: Optional[Path] = typer.Option(
         None, "-w", "--working-dir", help="Working directory"
     ),
@@ -37,8 +60,8 @@ def interview(
 
 @app.command()
 def plan(
-    project: str = typer.Argument(..., help="Project name"),
-    tasks: list[str] = typer.Argument(..., help="Task numbers or ranges (e.g., 1-4 6 8-10)"),
+    project: Annotated[str, typer.Argument(help="Project name", callback=validate_project_name)],
+    tasks: Annotated[list[str], typer.Argument(help="Task numbers or ranges (e.g., 1-4 6 8-10)", callback=validate_task_numbers)],
     working_dir: Optional[Path] = typer.Option(
         None, "-w", "--working-dir", help="Working directory"
     ),
@@ -51,8 +74,8 @@ def plan(
 
 @app.command()
 def implement(
-    project: str = typer.Argument(..., help="Project name"),
-    tasks: list[str] = typer.Argument(..., help="Task numbers or ranges (e.g., 1-4 6 8-10)"),
+    project: Annotated[str, typer.Argument(help="Project name", callback=validate_project_name)],
+    tasks: Annotated[list[str], typer.Argument(help="Task numbers or ranges (e.g., 1-4 6 8-10)", callback=validate_task_numbers)],
     working_dir: Optional[Path] = typer.Option(
         None, "-w", "--working-dir", help="Working directory"
     ),
