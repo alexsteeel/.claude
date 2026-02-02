@@ -76,9 +76,7 @@ class Notifier:
 
     def session_start(self, project: str, tasks: list[int]) -> bool:
         """Notify session start."""
-        task_str = ", ".join(str(t) for t in tasks[:10])
-        if len(tasks) > 10:
-            task_str += "..."
+        task_str = ", ".join(str(t) for t in tasks)
 
         message = f"""🚀 *RALPH STARTED*
 
@@ -121,13 +119,29 @@ Resuming task {task_ref}"""
         failed: list[int],
         failed_reasons: Optional[list[str]] = None,
         durations: Optional[dict[int, str]] = None,
+        total_cost_usd: float = 0.0,
+        task_costs: Optional[dict[int, float]] = None,
+        project_stats: Optional[dict[str, int]] = None,
     ) -> bool:
-        """Notify session completion."""
+        """Notify session completion with extended stats.
+
+        Args:
+            project: Project name
+            duration: Total session duration
+            completed: List of completed task numbers
+            failed: List of failed task numbers
+            failed_reasons: Reasons for each failure
+            durations: Duration for each task
+            total_cost_usd: Total cost for all tasks
+            task_costs: Cost for each individual task
+            project_stats: Task status counts from project (e.g., {'done': 5, 'work': 1})
+        """
         lines = [
             "📊 *RALPH SESSION COMPLETE*",
             "",
             f"*Project:* {escape_markdown(project)}",
             f"*Duration:* {duration}",
+            f"*Total cost:* ${total_cost_usd:.4f}",
         ]
 
         if completed:
@@ -135,8 +149,14 @@ Resuming task {task_ref}"""
             lines.append(f"✅ *Completed ({len(completed)}):*")
             for task in completed:
                 dur = durations.get(task, "") if durations else ""
-                dur_str = f" ({dur})" if dur else ""
-                lines.append(f"• #{task}{dur_str}")
+                cost = task_costs.get(task, 0.0) if task_costs else 0.0
+                parts = []
+                if dur:
+                    parts.append(dur)
+                if cost > 0:
+                    parts.append(f"${cost:.4f}")
+                suffix = f" ({', '.join(parts)})" if parts else ""
+                lines.append(f"• #{task}{suffix}")
 
         if failed:
             lines.append("")
@@ -149,10 +169,38 @@ Resuming task {task_ref}"""
                 )
                 lines.append(f"• #{task} — {escape_markdown(reason)}")
 
+        # Add project task status summary
+        if project_stats:
+            lines.append("")
+            lines.append("📋 *Project status:*")
+            status_order = ["done", "work", "hold", "backlog"]
+            status_icons = {"done": "✅", "work": "🔄", "hold": "⏸️", "backlog": "📝"}
+            for status in status_order:
+                count = project_stats.get(status, 0)
+                if count > 0:
+                    icon = status_icons.get(status, "•")
+                    lines.append(f"{icon} {status}: {count}")
+
         return self._send("\n".join(lines))
 
     def context_overflow(self, task_ref: str, retry: int, max_retries: int) -> bool:
         """Notify context overflow retry."""
         message = f"""⚠️ *Context overflow* on task {task_ref}
 Retry {retry}/{max_retries} with fresh session"""
+        return self._send(message)
+
+    def task_complete(
+        self,
+        task_ref: str,
+        duration: str,
+        cost_usd: float,
+        input_tokens: int,
+        output_tokens: int,
+    ) -> bool:
+        """Notify single task completion with stats."""
+        message = f"""✅ *Task {task_ref} completed*
+
+*Duration:* {duration}
+*Cost:* ${cost_usd:.4f}
+*Tokens:* {input_tokens:,} in / {output_tokens:,} out"""
         return self._send(message)

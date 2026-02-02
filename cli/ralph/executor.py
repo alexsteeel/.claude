@@ -23,6 +23,9 @@ class TaskResult:
     duration_seconds: int
     log_path: Path
     session_id: Optional[str] = None
+    cost_usd: float = 0.0
+    input_tokens: int = 0
+    output_tokens: int = 0
 
 
 def expand_task_ranges(args: list[str]) -> list[int]:
@@ -168,6 +171,11 @@ def run_claude(
 
         monitor.print_summary()
 
+    # Extract stats from monitor result
+    cost_usd = result.stats.cost_usd if result else 0.0
+    input_tokens = result.stats.input_tokens if result else 0
+    output_tokens = result.stats.output_tokens if result else 0
+
     return TaskResult(
         task_ref=task_ref,
         error_type=error_type,
@@ -175,4 +183,7 @@ def run_claude(
         duration_seconds=duration,
         log_path=log_path,
         session_id=session_id,
+        cost_usd=cost_usd,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
     )

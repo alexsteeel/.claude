@@ -1,5 +1,6 @@
 """Implement command - autonomous task implementation."""
 
+import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -15,6 +16,51 @@ from ..notify import Notifier
 from ..recovery import recovery_loop, should_recover, should_retry_fresh
 
 console = Console()
+
+
+def get_project_stats(project: str) -> dict[str, int]:
+    """Get task status counts from project using tm CLI.
+
+    Returns dict like {'done': 5, 'work': 1, 'hold': 0, 'backlog': 3}
+
+    Format of tm output:
+    - [ ] - backlog (todo)
+    - [x] - done
+    - [*] - work (in progress)
+    - [!] - hold
+    """
+    try:
+        result = subprocess.run(
+            ["tm", "t", "ls", project],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode != 0:
+            return {}
+
+        # Parse output - each line starts with status marker
+        stats: dict[str, int] = {}
+        status_map = {
+            "[ ]": "backlog",
+            "[x]": "done",
+            "[*]": "work",
+            "[!]": "hold",
+        }
+
+        for line in result.stdout.strip().split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            # Check status marker at start of line
+            for marker, status in status_map.items():
+                if line.startswith(marker):
+                    stats[status] = stats.get(status, 0) + 1
+                    break
+
+        return stats
+    except Exception:
+        return {}
 
 
 def run_implement(
@@ -72,6 +118,8 @@ def run_implement(
     failed: list[int] = []
     failed_reasons: list[str] = []
     task_durations: dict[int, str] = {}
+    task_costs: dict[int, float] = {}
+    total_cost: float = 0.0
     pipeline_stopped = False
     start_time = datetime.now()
 
@@ -100,11 +148,22 @@ def run_implement(
         )
 
         task_durations[task_num] = format_duration(result.duration_seconds)
+        task_costs[task_num] = result.cost_usd
+        total_cost += result.cost_usd
 
         if result.error_type.is_success:
-            console.print(f"[green]✓ Completed: {task_ref} ({task_durations[task_num]})[/green]")
+            console.print(f"[green]✓ Completed: {task_ref} ({task_durations[task_num]}, ${result.cost_usd:.4f})[/green]")
             session_log.append(f"Completed: {task_ref}")
             completed.append(task_num)
+
+            # Send task completion notification to Telegram
+            notifier.task_complete(
+                task_ref=task_ref,
+                duration=task_durations[task_num],
+                cost_usd=result.cost_usd,
+                input_tokens=result.input_tokens,
+                output_tokens=result.output_tokens,
+            )
 
         elif result.error_type == ErrorType.ON_HOLD:
             console.print(f"[yellow]⚠ On hold: {task_ref}[/yellow]")
@@ -135,8 +194,12 @@ def run_implement(
 
     console.rule("[bold blue]Session Complete[/bold blue]")
     console.print(f"Duration: [green]{duration}[/green]")
+    console.print(f"Total cost: [green]${total_cost:.4f}[/green]")
     console.print(f"Completed: [green]{len(completed)}[/green]")
     console.print(f"Failed: [red]{len(failed)}[/red]")
+
+    # Get project stats for final report
+    project_stats = get_project_stats(project)
 
     # Notify session complete
     notifier.session_complete(
@@ -146,6 +209,9 @@ def run_implement(
         failed=failed,
         failed_reasons=failed_reasons,
         durations=task_durations,
+        total_cost_usd=total_cost,
+        task_costs=task_costs,
+        project_stats=project_stats,
     )
 
     # Run batch check if any tasks completed
