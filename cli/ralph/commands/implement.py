@@ -63,6 +63,46 @@ def get_project_stats(project: str) -> dict[str, int]:
         return {}
 
 
+def get_task_status(project: str, task_num: int) -> Optional[str]:
+    """Get status of a specific task using tm CLI.
+
+    Returns status string ('done', 'work', 'hold', 'backlog') or None.
+    """
+    try:
+        result = subprocess.run(
+            ["tm", "t", "ls", project],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode != 0:
+            return None
+
+        status_map = {
+            "[ ]": "backlog",
+            "[x]": "done",
+            "[*]": "work",
+            "[!]": "hold",
+        }
+
+        for line in result.stdout.strip().split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            # Check if this line is for our task (format: "[x] 1. Task title")
+            for marker, status in status_map.items():
+                if line.startswith(marker):
+                    # Extract task number after marker
+                    rest = line[len(marker):].strip()
+                    if rest.startswith(f"{task_num}."):
+                        return status
+                    break
+
+        return None
+    except Exception:
+        return None
+
+
 def run_implement(
     project: str,
     task_args: list[str],
@@ -152,9 +192,12 @@ def run_implement(
         total_cost += result.cost_usd
 
         if result.error_type.is_success:
-            console.print(f"[green]✓ Completed: {task_ref} ({task_durations[task_num]}, ${result.cost_usd:.4f})[/green]")
+            console.print(f"[green]✓ Completed: {task_ref} ({task_durations[task_num]}, ${result.cost_usd:.2f})[/green]")
             session_log.append(f"Completed: {task_ref}")
             completed.append(task_num)
+
+            # Get task status for notification
+            task_status = get_task_status(project, task_num)
 
             # Send task completion notification to Telegram
             notifier.task_complete(
@@ -163,6 +206,7 @@ def run_implement(
                 cost_usd=result.cost_usd,
                 input_tokens=result.input_tokens,
                 output_tokens=result.output_tokens,
+                status=task_status,
             )
 
         elif result.error_type == ErrorType.ON_HOLD:
@@ -194,7 +238,7 @@ def run_implement(
 
     console.rule("[bold blue]Session Complete[/bold blue]")
     console.print(f"Duration: [green]{duration}[/green]")
-    console.print(f"Total cost: [green]${total_cost:.4f}[/green]")
+    console.print(f"Total cost: [green]${total_cost:.2f}[/green]")
     console.print(f"Completed: [green]{len(completed)}[/green]")
     console.print(f"Failed: [red]{len(failed)}[/red]")
 

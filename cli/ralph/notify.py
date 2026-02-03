@@ -141,7 +141,7 @@ Resuming task {task_ref}"""
             "",
             f"*Project:* {escape_markdown(project)}",
             f"*Duration:* {duration}",
-            f"*Total cost:* ${total_cost_usd:.4f}",
+            f"*Total cost:* ${total_cost_usd:.2f}",
         ]
 
         if completed:
@@ -154,7 +154,7 @@ Resuming task {task_ref}"""
                 if dur:
                     parts.append(dur)
                 if cost > 0:
-                    parts.append(f"${cost:.4f}")
+                    parts.append(f"${cost:.2f}")
                 suffix = f" ({', '.join(parts)})" if parts else ""
                 lines.append(f"• #{task}{suffix}")
 
@@ -196,11 +196,18 @@ Retry {retry}/{max_retries} with fresh session"""
         cost_usd: float,
         input_tokens: int,
         output_tokens: int,
+        status: Optional[str] = None,
     ) -> bool:
         """Notify single task completion with stats."""
+        status_icons = {"done": "✅", "work": "🔄", "hold": "⏸️", "backlog": "📝"}
+        status_line = ""
+        if status:
+            icon = status_icons.get(status, "•")
+            status_line = f"\n*Status:* {icon} {status}"
+
         message = f"""✅ *Task {task_ref} completed*
 
 *Duration:* {duration}
-*Cost:* ${cost_usd:.4f}
-*Tokens:* {input_tokens:,} in / {output_tokens:,} out"""
+*Cost:* ${cost_usd:.2f}
+*Tokens:* {input_tokens:,} in / {output_tokens:,} out{status_line}"""
         return self._send(message)

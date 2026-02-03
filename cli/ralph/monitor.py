@@ -247,7 +247,7 @@ class StreamMonitor:
                 )
                 self._write(f"{DIM}  Raw error: {raw_error}{NC}")
         else:
-            self._write(f"{MAGENTA}📊 {input_t:,} in / {output_t:,} out | ${cost:.4f}{NC}")
+            self._write(f"{MAGENTA}📊 {input_t:,} in / {output_t:,} out | ${cost:.2f}{NC}")
 
     def _process_assistant(self, data: dict):
         """Process assistant message."""
@@ -325,6 +325,6 @@ class StreamMonitor:
                 f"{MAGENTA}Cache:  {self.stats.cache_read:,} ({cache_pct:.0f}%){NC}",
                 timestamp=False,
             )
-        self._write(f"{MAGENTA}Cost:   ${self.stats.cost_usd:.4f}{NC}", timestamp=False)
+        self._write(f"{MAGENTA}Cost:   ${self.stats.cost_usd:.2f}{NC}", timestamp=False)
         self._write(f"{MAGENTA}Tools:  {self.stats.tool_calls}{NC}", timestamp=False)
         self._write(f"{MAGENTA}{'═' * 50}{NC}", timestamp=False)
