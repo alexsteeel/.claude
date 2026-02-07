@@ -11,64 +11,63 @@ Task ref: `$ARGUMENTS`
 
 **ВАЖНО:** Это standalone review команда, НЕ полный workflow. Не требует confirmation phrase.
 
-## Запусти Codex review через Task (изолированный контекст)
+## ПРИМЕЧАНИЕ
 
-Используй Task tool с **явными инструкциями** для subagent:
+В `ralph review` этот codex review вызывается **напрямую через codex CLI** (без Claude).
+Эта команда — для ручного запуска, когда нужен codex review вне ralph workflow.
 
-```
-Task(
-    subagent_type="general-purpose",
-    prompt="## КРИТИЧЕСКИ ВАЖНО — Прочитай внимательно!
+## 1. Проверь доступность Codex
 
-Ты ДОЛЖЕН использовать Skill tool для загрузки инструкций codex-review.
-Это НЕ просьба сделать code review — это команда вызвать конкретный skill.
-
-### Что ты ДОЛЖЕН сделать:
-
-1. Вызови Skill tool:
-   ```
-   Skill(skill=\"codex-review\", args=\"$ARGUMENTS\")
-   ```
-
-2. Skill загрузит 404 строки инструкций включая:
-   - 6 фаз workflow (Get Task → Run Codex → Read Review → Handle Issues → Re-Review → Finalize)
-   - Команду `codex review` с профилем gpt-5.2-codex
-   - UI тестирование через Playwright
-   - До 3 итераций проверок
-
-3. Следуй инструкциям из загруженного skill
-
-### Что тебе ЗАПРЕЩЕНО:
-
-❌ НЕ делай review самостоятельно
-❌ НЕ запускай git diff, ruff, тесты напрямую
-❌ НЕ используй Edit tool для редактирования кода
-❌ НЕ пиши свой review вместо вызова Codex CLI
-
-### Проверка успеха:
-
-После выполнения skill в логе ДОЛЖНЫ быть:
-- Вызов `which codex`
-- Вызов `codex review ...`
-- Запись в review поле задачи через mcp__md-task-mcp__update_task
-
-Начни с вызова Skill tool СЕЙЧАС."
-)
+```bash
+which codex || { echo "ERROR: codex not found"; exit 1; }
 ```
 
-**Codex сам сохраняет результаты в review поле задачи** — не дублируй!
+**Если codex не найден — СТОП. НЕ заменяй своим ревью.**
 
-## Верни статус
+## 2. Получи задачу
 
-После завершения Task:
+Используй `mcp__md-task-mcp__tasks(project, number)` чтобы получить task.
+Запомни текущее содержимое `review` поля.
+
+## 3. Запусти codex review НАПРЯМУЮ
+
+```bash
+REVIEW_DIR="$HOME/.claude/logs/reviews"
+mkdir -p "$REVIEW_DIR"
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+TASK_SAFE=$(echo "$ARGUMENTS" | tr '#' '_')
+LOG_FILE="${REVIEW_DIR}/${TASK_SAFE}_codex-review_${TIMESTAMP}.log"
+
+codex review \
+  -c 'profiles.review.model="gpt-5.2-codex"' \
+  -c 'profiles.review.model_reasoning_effort="xhigh"' \
+  -c 'profile="review"' \
+  "
+Ты выполняешь код-ревью для задачи $ARGUMENTS.
+
+1. Получи детали задачи через MCP md-task-mcp: tasks(project, number)
+2. Прочитай CLAUDE.md в директории тестов для получения URL и credentials
+3. Проанализируй незакоммиченные изменения (git diff, git status) на соответствие ТЗ
+4. Если есть frontend изменения — проверь UI через playwright MCP
+5. ДОБАВЬ результаты к существующему Review: update_task(project, number, review=existing + new)
+
+Формат замечаний: Severity (CRITICAL/HIGH/MEDIUM/LOW), File, Line, Issue.
+НЕ ИЗМЕНЯЙ КОД. Результаты ДОБАВЛЯЙ к существующему Review (append).
+Если нет замечаний — 'NO ISSUES FOUND'.
+" 2>&1 | tee "$LOG_FILE"
+```
+
+**ОБЯЗАТЕЛЬНО проверь exit code.** Если не 0 — сообщи ошибку, НЕ продолжай.
+
+## 4. Проверь результат
+
+Получи обновлённую задачу через `mcp__md-task-mcp__tasks(project, number)`.
+Убедись что в review поле появились результаты от Codex.
+
+**Если review не обновился** — codex не выполнил задачу. Сообщи ошибку, прочитай лог.
+
+## 5. Верни статус
 
 ```
 ✅ Codex Review: {project}#{number} — см. review поле задачи
-```
-
-Если в результате Task **НЕТ** вызова `codex review`:
-
-```
-❌ Codex Review FAILED: subagent не вызвал Skill tool
-   Проверь лог на наличие "codex review" команды
 ```
