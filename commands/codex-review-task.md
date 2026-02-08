@@ -1,6 +1,6 @@
 ---
-name: ralph-review-codex
-description: Run Codex review, save results to task
+name: codex-review-task
+description: Run Codex CLI review for a task, save results to task
 arguments:
   - name: task_ref
     description: Task reference "project#N"
@@ -9,12 +9,10 @@ arguments:
 
 Task ref: `$ARGUMENTS`
 
-**ВАЖНО:** Это standalone review команда, НЕ полный workflow. Не требует confirmation phrase.
+**ВАЖНО:** Это standalone команда для ручного запуска codex review. Не требует confirmation phrase.
 
-## ПРИМЕЧАНИЕ
-
-В `ralph review` этот codex review вызывается **напрямую через codex CLI** (без Claude).
-Эта команда — для ручного запуска, когда нужен codex review вне ralph workflow.
+> В `ralph review` codex вызывается **напрямую из Python CLI** (без Claude).
+> Эта команда — для случаев когда нужен codex review отдельно.
 
 ## 1. Проверь доступность Codex
 
@@ -39,6 +37,7 @@ TASK_SAFE=$(echo "$ARGUMENTS" | tr '#' '_')
 LOG_FILE="${REVIEW_DIR}/${TASK_SAFE}_codex-review_${TIMESTAMP}.log"
 
 codex review \
+  --uncommitted \
   -c 'profiles.review.model="gpt-5.3-codex"' \
   -c 'profiles.review.model_reasoning_effort="xhigh"' \
   -c 'profile="review"' \
@@ -47,7 +46,7 @@ codex review \
 
 1. Получи детали задачи через MCP md-task-mcp: tasks(project, number)
 2. Прочитай CLAUDE.md в директории тестов для получения URL и credentials
-3. Проанализируй незакоммиченные изменения (git diff, git status) на соответствие ТЗ
+3. Проанализируй незакоммиченные изменения на соответствие ТЗ
 4. Если есть frontend изменения — проверь UI через playwright MCP
 5. ДОБАВЬ результаты к существующему Review: update_task(project, number, review=existing + new)
 

@@ -559,7 +559,7 @@ Bash(command="ralph review {project}#{number}")
 1. `/ralph-review-code` — 5 агентов параллельно
 2. `/ralph-review-simplify` — code-simplifier
 3. `/ralph-review-security` — security review
-4. `/ralph-review-codex` — Codex review
+4. Codex review — direct CLI (via `ralph review`)
 
 ### Проверка результатов
 

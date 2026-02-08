@@ -86,7 +86,7 @@ ralph implement myproject 1 --no-recovery
 | `/ralph-review-code project#N` | 5 агентов ревью параллельно |
 | `/ralph-review-simplify project#N` | Упрощение кода |
 | `/ralph-review-security project#N` | Аудит безопасности |
-| `/ralph-review-codex project#N` | Ревью через Codex CLI |
+| `/codex-review-task project#N` | Ревью через Codex CLI |
 | `/python-linters` | Запуск ruff и djlint |
 
 ### Управление задачами
