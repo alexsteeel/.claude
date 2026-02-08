@@ -192,9 +192,9 @@ def run_single_review(
 def _build_codex_prompt(task_ref: str) -> str:
     """Build the prompt for codex review."""
     # Parse task_ref: "project#N" -> project, N
-    parts = task_ref.split("#", 1)
-    project = parts[0]
-    number = parts[1] if len(parts) > 1 else "?"
+    if "#" not in task_ref:
+        raise ValueError(f"Invalid task_ref format: {task_ref!r}, expected 'project#N'")
+    project, number = task_ref.split("#", 1)
 
     return f"""Ты выполняешь код-ревью для задачи {task_ref}.
 
@@ -256,24 +256,24 @@ def _detect_failure_reason(result: ReviewResult) -> str:
 
     tail_lower = tail.lower()
 
-    if "rate" in tail_lower and "limit" in tail_lower or "429" in tail:
+    if ("rate" in tail_lower and "limit" in tail_lower) or "429" in tail:
         return "Rate limit (429)"
     if "quota" in tail_lower or "billing" in tail_lower or "insufficient" in tail_lower:
         return "Quota/billing limit exceeded"
     if "timeout" in tail_lower or "timed out" in tail_lower:
         return "Request timeout"
-    if "401" in tail or "unauthorized" in tail_lower or "auth" in tail_lower and "fail" in tail_lower:
+    if "401" in tail or "unauthorized" in tail_lower or ("auth" in tail_lower and "fail" in tail_lower):
         return "Authentication error (401)"
     if "403" in tail or "forbidden" in tail_lower:
         return "Forbidden (403)"
     if "529" in tail or "overloaded" in tail_lower:
         return "API overloaded (529)"
-    if "codex not found" in tail_lower or "not found" in tail_lower and "codex" in tail_lower:
+    if "codex not found" in tail_lower or ("not found" in tail_lower and "codex" in tail_lower):
         return "codex CLI not installed"
     if "connection" in tail_lower and ("refused" in tail_lower or "error" in tail_lower or "reset" in tail_lower):
         return "Connection error"
 
-    return f"Exit code non-zero (see log)"
+    return "Exit code non-zero (see log)"
 
 
 def run_codex_review_direct(

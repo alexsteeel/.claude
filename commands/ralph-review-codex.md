@@ -68,6 +68,6 @@ codex review \
 
 ## 5. Верни статус
 
-```
+```text
 ✅ Codex Review: {project}#{number} — см. review поле задачи
 ```

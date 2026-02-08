@@ -186,7 +186,7 @@ Resuming task {task_ref}"""
     def review_failed(self, task_ref: str, review_name: str, reason: str, log_path: str = "") -> bool:
         """Notify review failure (codex or other)."""
         lines = [
-            f"🚨 *REVIEW FAILED*",
+            "🚨 *REVIEW FAILED*",
             "",
             f"*Task:* {task_ref}",
             f"*Review:* {escape_markdown(review_name)}",
