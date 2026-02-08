@@ -11,6 +11,7 @@ from rich.table import Table
 
 from ..config import Settings, get_settings
 from ..logging import format_duration
+from ..notify import Notifier
 
 console = Console()
 
@@ -36,6 +37,7 @@ CLAUDE_REVIEWS = [
 def run_review(task_ref: str) -> int:
     """Run all code reviews in isolated contexts."""
     settings = get_settings()
+    notifier = Notifier()
 
     console.rule(f"[bold blue]Running Reviews: {task_ref}[/bold blue]")
 
@@ -93,9 +95,18 @@ def run_review(task_ref: str) -> int:
     # Print summary
     print_review_summary(results)
 
-    # Count failures
-    failures = sum(1 for r in results if not r.success)
-    return 0 if failures == 0 else 1
+    # Notify about failures
+    failed_reviews = [r for r in results if not r.success]
+    for r in failed_reviews:
+        reason = _detect_failure_reason(r)
+        notifier.review_failed(
+            task_ref=task_ref,
+            review_name=r.name,
+            reason=reason,
+            log_path=str(r.log_path),
+        )
+
+    return 0 if not failed_reviews else 1
 
 
 def run_single_review(
@@ -228,6 +239,41 @@ def _build_codex_prompt(task_ref: str) -> str:
 - Результаты ДОБАВЛЯЙ к существующему Review (append, не replace)
 - Если нет замечаний — напиши 'NO ISSUES FOUND'
 """
+
+
+def _detect_failure_reason(result: ReviewResult) -> str:
+    """Detect failure reason from review log file."""
+    if not result.log_path.exists() or result.log_size == 0:
+        return "No output (process crashed or not found)"
+
+    try:
+        # Read last 2KB of log for error detection
+        with open(result.log_path, "r", errors="replace") as f:
+            f.seek(max(0, result.log_size - 2048))
+            tail = f.read()
+    except Exception:
+        return "Could not read log file"
+
+    tail_lower = tail.lower()
+
+    if "rate" in tail_lower and "limit" in tail_lower or "429" in tail:
+        return "Rate limit (429)"
+    if "quota" in tail_lower or "billing" in tail_lower or "insufficient" in tail_lower:
+        return "Quota/billing limit exceeded"
+    if "timeout" in tail_lower or "timed out" in tail_lower:
+        return "Request timeout"
+    if "401" in tail or "unauthorized" in tail_lower or "auth" in tail_lower and "fail" in tail_lower:
+        return "Authentication error (401)"
+    if "403" in tail or "forbidden" in tail_lower:
+        return "Forbidden (403)"
+    if "529" in tail or "overloaded" in tail_lower:
+        return "API overloaded (529)"
+    if "codex not found" in tail_lower or "not found" in tail_lower and "codex" in tail_lower:
+        return "codex CLI not installed"
+    if "connection" in tail_lower and ("refused" in tail_lower or "error" in tail_lower or "reset" in tail_lower):
+        return "Connection error"
+
+    return f"Exit code non-zero (see log)"
 
 
 def run_codex_review_direct(

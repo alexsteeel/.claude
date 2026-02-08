@@ -183,6 +183,20 @@ Resuming task {task_ref}"""
 
         return self._send("\n".join(lines))
 
+    def review_failed(self, task_ref: str, review_name: str, reason: str, log_path: str = "") -> bool:
+        """Notify review failure (codex or other)."""
+        lines = [
+            f"🚨 *REVIEW FAILED*",
+            "",
+            f"*Task:* {task_ref}",
+            f"*Review:* {escape_markdown(review_name)}",
+            f"*Reason:* {escape_markdown(reason)}",
+            f"*Time:* {datetime.now().strftime('%H:%M')}",
+        ]
+        if log_path:
+            lines.append(f"*Log:* {escape_markdown(log_path)}")
+        return self._send("\n".join(lines))
+
     def context_overflow(self, task_ref: str, retry: int, max_retries: int) -> bool:
         """Notify context overflow retry."""
         message = f"""⚠️ *Context overflow* on task {task_ref}
