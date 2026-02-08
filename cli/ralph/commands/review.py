@@ -11,6 +11,7 @@ from rich.table import Table
 
 from ..config import Settings, get_settings
 from ..logging import format_duration
+from ..notify import Notifier
 
 console = Console()
 
@@ -25,18 +26,18 @@ class ReviewResult(NamedTuple):
     log_size: int
 
 
-# Review definitions
-REVIEWS = [
+# Claude-based reviews (run via claude -p "/command task_ref")
+CLAUDE_REVIEWS = [
     ("Code Review (5 agents)", "ralph-review-code"),
     ("Code Simplifier", "ralph-review-simplify"),
     ("Security Review", "ralph-review-security"),
-    ("Codex Review", "ralph-review-codex"),
 ]
 
 
 def run_review(task_ref: str) -> int:
     """Run all code reviews in isolated contexts."""
     settings = get_settings()
+    notifier = Notifier()
 
     console.rule(f"[bold blue]Running Reviews: {task_ref}[/bold blue]")
 
@@ -61,7 +62,8 @@ def run_review(task_ref: str) -> int:
     results: list[ReviewResult] = []
 
     try:
-        for review_name, skill_name in REVIEWS:
+        # Run Claude-based reviews
+        for review_name, skill_name in CLAUDE_REVIEWS:
             result = run_single_review(
                 task_ref=task_ref,
                 review_name=review_name,
@@ -71,6 +73,15 @@ def run_review(task_ref: str) -> int:
                 settings=settings,
             )
             results.append(result)
+
+        # Run Codex review directly via codex CLI (bypasses Claude)
+        result = run_codex_review_direct(
+            task_ref=task_ref,
+            log_dir=log_dir,
+            timestamp=ts,
+            settings=settings,
+        )
+        results.append(result)
 
     finally:
         # Restore workflow state
@@ -84,9 +95,18 @@ def run_review(task_ref: str) -> int:
     # Print summary
     print_review_summary(results)
 
-    # Count failures
-    failures = sum(1 for r in results if not r.success)
-    return 0 if failures == 0 else 1
+    # Notify about failures
+    failed_reviews = [r for r in results if not r.success]
+    for r in failed_reviews:
+        reason = _detect_failure_reason(r)
+        notifier.review_failed(
+            task_ref=task_ref,
+            review_name=r.name,
+            reason=reason,
+            log_path=str(r.log_path),
+        )
+
+    return 0 if not failed_reviews else 1
 
 
 def run_single_review(
@@ -149,6 +169,184 @@ def run_single_review(
     except subprocess.TimeoutExpired:
         duration = int(time.time() - start_time)
         console.print(f"[red]✗ Timeout: {review_name}[/red]")
+        return ReviewResult(
+            name=review_name,
+            success=False,
+            duration_seconds=duration,
+            log_path=log_path,
+            log_size=log_path.stat().st_size if log_path.exists() else 0,
+        )
+
+    except Exception as e:
+        duration = int(time.time() - start_time)
+        console.print(f"[red]✗ Error: {review_name} - {e}[/red]")
+        return ReviewResult(
+            name=review_name,
+            success=False,
+            duration_seconds=duration,
+            log_path=log_path,
+            log_size=0,
+        )
+
+
+def _build_codex_prompt(task_ref: str) -> str:
+    """Build the prompt for codex review."""
+    # Parse task_ref: "project#N" -> project, N
+    if "#" not in task_ref:
+        raise ValueError(f"Invalid task_ref format: {task_ref!r}, expected 'project#N'")
+    project, number = task_ref.split("#", 1)
+
+    return f"""Ты выполняешь код-ревью для задачи {task_ref}.
+
+## Твоя задача
+
+1. Получи детали задачи через MCP md-task-mcp: tasks(project="{project}", number={number})
+2. Прочитай CLAUDE.md в директории тестов для получения URL и credentials тестового сервера
+3. Проанализируй незакоммиченные изменения (git diff, git status) на соответствие ТЗ
+4. Если есть frontend изменения — ОБЯЗАТЕЛЬНО проверь UI через playwright MCP
+5. ДОБАВЬ результаты к существующему Review: update_task(project, number, review=existing_review + new_review)
+
+## UI Verification (ОБЯЗАТЕЛЬНО для frontend)
+
+Если изменения затрагивают templates/static/UI:
+1. Найди и прочитай CLAUDE.md в директории тестов затронутого сервиса для URL и credentials
+2. Используй playwright MCP: browser_navigate → browser_screenshot
+3. Проверь что UI отображается корректно
+4. Добавь результат проверки в Review
+
+## Что проверять
+
+1. **Соответствие ТЗ**: Все изменения соответствуют требованиям задачи
+2. **Безопасность**: SQL injection, XSS, CSRF, hardcoded secrets, input validation
+3. **Логика**: Ошибки в бизнес-логике, edge cases, race conditions
+4. **Тесты**: Достаточность покрытия, корректность assertions, edge cases в тестах
+5. **Code Quality**: Naming, DRY, SOLID, error handling
+6. **UI Verification** (ОБЯЗАТЕЛЬНО для frontend изменений): Проверить через playwright MCP
+
+## Формат замечаний
+
+Для КАЖДОГО замечания укажи:
+- **Severity**: CRITICAL / HIGH / MEDIUM / LOW
+- **File**: путь к файлу
+- **Line**: номер строки (если применимо)
+- **Issue**: описание проблемы
+
+НЕ ПИШИ suggestion — это задача разработчика.
+
+## Важно
+
+- НЕ ИЗМЕНЯЙ КОД — только анализируй
+- Результаты ДОБАВЛЯЙ к существующему Review (append, не replace)
+- Если нет замечаний — напиши 'NO ISSUES FOUND'
+"""
+
+
+def _detect_failure_reason(result: ReviewResult) -> str:
+    """Detect failure reason from review log file."""
+    if not result.log_path.exists() or result.log_size == 0:
+        return "No output (process crashed or not found)"
+
+    try:
+        # Read last 2KB of log for error detection
+        with open(result.log_path, "r", errors="replace") as f:
+            f.seek(max(0, result.log_size - 2048))
+            tail = f.read()
+    except Exception:
+        return "Could not read log file"
+
+    tail_lower = tail.lower()
+
+    if ("rate" in tail_lower and "limit" in tail_lower) or "429" in tail:
+        return "Rate limit (429)"
+    if "quota" in tail_lower or "billing" in tail_lower or "insufficient" in tail_lower:
+        return "Quota/billing limit exceeded"
+    if "timeout" in tail_lower or "timed out" in tail_lower:
+        return "Request timeout"
+    if "401" in tail or "unauthorized" in tail_lower or ("auth" in tail_lower and "fail" in tail_lower):
+        return "Authentication error (401)"
+    if "403" in tail or "forbidden" in tail_lower:
+        return "Forbidden (403)"
+    if "529" in tail or "overloaded" in tail_lower:
+        return "API overloaded (529)"
+    if "codex not found" in tail_lower or ("not found" in tail_lower and "codex" in tail_lower):
+        return "codex CLI not installed"
+    if "connection" in tail_lower and ("refused" in tail_lower or "error" in tail_lower or "reset" in tail_lower):
+        return "Connection error"
+
+    return "Exit code non-zero (see log)"
+
+
+def run_codex_review_direct(
+    task_ref: str,
+    log_dir: Path,
+    timestamp: str,
+    settings: Settings,
+) -> ReviewResult:
+    """Run codex review directly via codex CLI, bypassing Claude."""
+    review_name = "Codex Review"
+    console.print(f"[cyan]Starting: {review_name} (direct codex CLI)[/cyan]")
+
+    task_safe = task_ref.replace("#", "_")
+    log_path = log_dir / f"{task_safe}_codex_review_{timestamp}.log"
+
+    prompt = _build_codex_prompt(task_ref)
+
+    cmd = [
+        "codex", "review",
+        "--uncommitted",
+        "-c", 'profiles.review.model="gpt-5.3-codex"',
+        "-c", 'profiles.review.model_reasoning_effort="xhigh"',
+        "-c", 'profile="review"',
+        prompt,
+    ]
+
+    start_time = time.time()
+
+    try:
+        with open(log_path, "w") as log_file:
+            result = subprocess.run(
+                cmd,
+                stdin=subprocess.DEVNULL,
+                stdout=log_file,
+                stderr=subprocess.STDOUT,
+                timeout=settings.review_timeout,
+            )
+
+        duration = int(time.time() - start_time)
+        success = result.returncode == 0
+        log_size = log_path.stat().st_size
+
+        if success:
+            console.print(f"[green]✓ Completed: {review_name} ({format_duration(duration)})[/green]")
+        else:
+            console.print(f"[red]✗ Failed: {review_name} (exit code {result.returncode})[/red]")
+
+        return ReviewResult(
+            name=review_name,
+            success=success,
+            duration_seconds=duration,
+            log_path=log_path,
+            log_size=log_size,
+        )
+
+    except subprocess.TimeoutExpired:
+        duration = int(time.time() - start_time)
+        console.print(f"[red]✗ Timeout: {review_name}[/red]")
+        return ReviewResult(
+            name=review_name,
+            success=False,
+            duration_seconds=duration,
+            log_path=log_path,
+            log_size=log_path.stat().st_size if log_path.exists() else 0,
+        )
+
+    except FileNotFoundError:
+        duration = int(time.time() - start_time)
+        console.print(f"[red]✗ Error: {review_name} - codex CLI not found (install: npm i -g @openai/codex)[/red]")
+        # Write error to log
+        with open(log_path, "w") as f:
+            f.write("ERROR: codex CLI not found\n")
+            f.write("Install: npm i -g @openai/codex\n")
         return ReviewResult(
             name=review_name,
             success=False,

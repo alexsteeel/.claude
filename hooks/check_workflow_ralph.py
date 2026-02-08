@@ -53,7 +53,7 @@ CHECKLIST = """
 - [ ] `/ralph-review-code` выполнен (5 агентов)
 - [ ] `/ralph-review-simplify` выполнен
 - [ ] `/ralph-review-security` выполнен
-- [ ] `/ralph-review-codex` выполнен
+- [ ] Codex review выполнен (direct CLI)
 - [ ] ВСЕ замечания исправлены ИЛИ обоснованно отклонены
 
 ### Testing (Final)

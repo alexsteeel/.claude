@@ -144,7 +144,7 @@ This ensures each task starts with a clean codebase.
 | `/ralph-review-code project#N` | 5 code review agents in parallel, saves to task |
 | `/ralph-review-simplify project#N` | Code simplifier, saves to task |
 | `/ralph-review-security project#N` | Security review, saves to task |
-| `/ralph-review-codex project#N` | Codex review, saves to task |
+| `/codex-review-task project#N` | Codex review, saves to task |
 | `/python-linters` | Run ruff and djlint on codebase |
 
 ### Reviews (direct, not recommended)
@@ -291,7 +291,7 @@ All workflows require comprehensive testing:
 - `/ralph-review-code` — 5 agents in parallel
 - `/ralph-review-simplify` — code-simplifier
 - `/ralph-review-security` — security review
-- `/ralph-review-codex` — Codex review
+- `/codex-review-task` — Codex review
 
 ## Ralph Workflow Architecture
 
@@ -453,7 +453,7 @@ Log files:
   Code Review (5 agents): ~/.claude/logs/reviews/project_N_ralph-review-code_*.log
   Code Simplifier: ~/.claude/logs/reviews/project_N_ralph-review-simplify_*.log
   Security Review: ~/.claude/logs/reviews/project_N_ralph-review-security_*.log
-  Codex Review: ~/.claude/logs/reviews/project_N_ralph-review-codex_*.log
+  Codex Review: ~/.claude/logs/reviews/project_N_codex_review_*.log
 ```
 
 ## Task Statuses (md-task-mcp)
