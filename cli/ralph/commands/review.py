@@ -293,6 +293,7 @@ def run_codex_review_direct(
 
     cmd = [
         "codex", "review",
+        "--uncommitted",
         "-c", 'profiles.review.model="gpt-5.3-codex"',
         "-c", 'profiles.review.model_reasoning_effort="xhigh"',
         "-c", 'profile="review"',
