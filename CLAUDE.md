@@ -125,6 +125,22 @@ git clean -fd
 
 This ensures each task starts with a clean codebase.
 
+## Git Operations
+
+### Fixup + Autosquash
+
+Для исправления существующего коммита без изменения сообщения:
+
+```bash
+# 1. Создать fixup коммит
+git commit --fixup=<commit-hash>
+
+# 2. Autosquash (неинтерактивный)
+GIT_SEQUENCE_EDITOR=true git rebase -i --autosquash <commit-hash>~1
+```
+
+`GIT_SEQUENCE_EDITOR=true` заменяет интерактивный редактор, автоматически принимая порядок от `--autosquash`.
+
 ## Commands
 
 ### Task Execution
@@ -144,7 +160,7 @@ This ensures each task starts with a clean codebase.
 | `/ralph-review-code project#N` | 5 code review agents in parallel, saves to task |
 | `/ralph-review-simplify project#N` | Code simplifier, saves to task |
 | `/ralph-review-security project#N` | Security review, saves to task |
-| `/codex-review-task project#N` | Codex review, saves to task |
+| `/codex-review-task project#N` | Codex review (deprecated — runs automatically from ralph implement) |
 | `/python-linters` | Run ruff and djlint on codebase |
 
 ### Reviews (direct, not recommended)
@@ -283,6 +299,7 @@ All workflows require comprehensive testing:
 9. Cleanup
 10. Documentation
 11. Complete (auto commit, report to task, status=done)
+→ Codex Review Loop (CLI level, after Phase 11)
 ```
 
 **Key difference**: Ralph is fully autonomous - no stops, auto-commits, blocks+hold on problems.
@@ -291,7 +308,12 @@ All workflows require comprehensive testing:
 - `/ralph-review-code` — 5 agents in parallel
 - `/ralph-review-simplify` — code-simplifier
 - `/ralph-review-security` — security review
-- `/codex-review-task` — Codex review
+
+**Codex Review Loop** (after Phase 11, CLI level):
+- `codex review` → direct subprocess call (no Claude intermediary)
+- If issues found → `claude --resume <session_id>` fix → re-review
+- Up to 3 iterations, fixup commit + autosquash on completion
+- See [Codex Review Loop Architecture](#codex-review-loop-architecture) for details
 
 ## Ralph Workflow Architecture
 
@@ -435,7 +457,7 @@ stateDiagram-v2
 ════════════════════════════════════════════════════════════════════════════════
   SUMMARY
 ════════════════════════════════════════════════════════════════════════════════
-✓ All 4/4 reviews completed successfully!
+✓ All 3/3 reviews completed successfully!
 
 ┌────────────────────────┬──────────────┬───────┬─────────────┐
 │         Review         │    Status    │ Time  │  Log Size   │
@@ -445,16 +467,66 @@ stateDiagram-v2
 │ Code Simplifier        │ ✅ Completed │ 01:56 │      2 KB   │
 ├────────────────────────┼──────────────┼───────┼─────────────┤
 │ Security Review        │ ✅ Completed │ 01:44 │      2 KB   │
-├────────────────────────┼──────────────┼───────┼─────────────┤
-│ Codex Review           │ ✅ Completed │ 03:49 │      4 KB   │
 └────────────────────────┴──────────────┴───────┴─────────────┘
 
 Log files:
   Code Review (5 agents): ~/.claude/logs/reviews/project_N_ralph-review-code_*.log
   Code Simplifier: ~/.claude/logs/reviews/project_N_ralph-review-simplify_*.log
   Security Review: ~/.claude/logs/reviews/project_N_ralph-review-security_*.log
-  Codex Review: ~/.claude/logs/reviews/project_N_codex_review_*.log
 ```
+
+Codex Review runs separately via CLI — see [Codex Review Loop Architecture](#codex-review-loop-architecture).
+
+## Codex Review Loop Architecture
+
+Автоматический цикл review→fix→re-review на уровне Python CLI (`implement.py`).
+
+### Почему так
+
+1. **Codex напрямую, без Claude-посредника.** Раньше: CLI → Claude → Subagent → Codex (4 слоя). Claude тратил контекст и деньги, не добавляя ценности. Теперь: CLI → Codex subprocess (2 слоя).
+
+2. **Fix через `--resume session_id`.** Claude fix возвращается в ту же сессию, что и основная реализация. Причина: ревьюер не является истиной в последней инстанции — Claude должен учитывать предысторию работы с задачей и может обоснованно отклонить замечания (Declined).
+
+3. **Модель не переопределяется при resume.** `--resume` наследует модель оригинальной сессии (opus). Это правильно — fix работает в том же контексте.
+
+### Поток выполнения
+
+```
+execute_task_with_recovery()         # Claude Phases 0-11 (коммит)
+  └→ result.session_id              # запоминаем для resume
+
+run_codex_review_loop(session_id):
+  iteration 1:
+    codex review (subprocess, без --uncommitted)
+    → LGTM? → done
+    → claude --resume <session_id> fix
+  iteration 2+:
+    codex review --uncommitted (проверяет фиксы)
+    → LGTM? → fixup commit + autosquash → done
+    → claude --resume <session_id> fix
+  max iterations → fixup commit если были фиксы
+
+run_batch_check()                    # без изменений
+```
+
+### Конфигурация (`~/.claude/.env`)
+
+```
+CODEX_REVIEW_MAX_ITERATIONS=3
+CODEX_REVIEW_TIMEOUT=600           # 10 min per codex review
+CODEX_REVIEW_FIX_TIMEOUT=900       # 15 min per claude fix
+CODEX_REVIEW_MODEL=gpt-5.2-codex
+```
+
+### Логи
+
+```
+~/.claude/logs/reviews/
+  {project}_{N}_codex-review_iter{I}_{timestamp}.log   # вывод codex
+  {project}_{N}_codex-fix_iter{I}_{timestamp}.log       # вывод claude fix
+```
+
+Видимы через `ralph logs -t review`.
 
 ## Task Statuses (md-task-mcp)
 

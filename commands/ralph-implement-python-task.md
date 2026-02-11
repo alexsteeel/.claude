@@ -555,11 +555,12 @@ Task(
 Bash(command="ralph review {project}#{number}")
 ```
 
-Команда последовательно запускает 4 отдельные сессии:
+Команда запускает 3 сессии (codex review выполняется отдельно на уровне CLI):
 1. `/ralph-review-code` — 5 агентов параллельно
 2. `/ralph-review-simplify` — code-simplifier
 3. `/ralph-review-security` — security review
-4. Codex review — direct CLI (via `ralph review`)
+
+> **Примечание:** Codex review выполняется автоматически на уровне `ralph implement` CLI после завершения всего workflow.
 
 ### Проверка результатов
 
@@ -934,7 +935,7 @@ cleanup completed
 - [ ] Existing tests не сломаны
 
 ### Reviews (Phase 6)
-- [ ] `ralph review` выполнен (все 4 команды)
+- [ ] `ralph review` выполнен (3 сессии; codex review — автоматически на уровне CLI)
 - [ ] Все замечания обработаны с отметками `[main-claude]`
 - [ ] Каждое замечание имеет: Fixed / Deferred to #N / Declined
 
