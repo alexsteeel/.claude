@@ -472,6 +472,7 @@ def run_codex_review(
             last_status_time = start_time
             line_count = 0
             past_prompt = False
+            expect_exec_cmd = False
             codex_output_lines: list[str] = []
             for raw_line in proc.stdout:
                 log_file.write(raw_line.decode("utf-8", errors="replace"))
@@ -484,16 +485,29 @@ def run_codex_review(
                 if past_prompt:
                     codex_output_lines.append(text)
 
+                # After "exec" line, next line has the command details
+                if expect_exec_cmd:
+                    expect_exec_cmd = False
+                    # Format: '/usr/bin/zsh -lc "cmd..." in /dir succeeded in Xms:'
+                    cmd_display = text
+                    if '"' in text:
+                        # Extract the shell command from between quotes
+                        parts = text.split('"', 2)
+                        if len(parts) >= 2:
+                            cmd_display = parts[1]
+                    elapsed = format_duration(int(time.time() - start_time))
+                    console.print(f"  [dim][{elapsed}] exec: {cmd_display}[/dim]")
+                    last_status_time = time.time()
+                    continue
+
                 # Show key events in console
                 if text.startswith("tool "):
                     tool_name = text.split("(", 1)[0].replace("tool ", "")
                     elapsed = format_duration(int(time.time() - start_time))
                     console.print(f"  [dim][{elapsed}] tool: {tool_name}[/dim]")
                     last_status_time = time.time()
-                elif text.startswith("exec"):
-                    elapsed = format_duration(int(time.time() - start_time))
-                    console.print(f"  [dim][{elapsed}] exec[/dim]")
-                    last_status_time = time.time()
+                elif text == "exec":
+                    expect_exec_cmd = True
                 elif time.time() - last_status_time >= 60:
                     elapsed = format_duration(int(time.time() - start_time))
                     console.print(f"  [dim][{elapsed}] processing... ({line_count} lines)[/dim]")
