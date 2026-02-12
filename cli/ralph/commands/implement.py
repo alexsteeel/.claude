@@ -458,31 +458,60 @@ def run_codex_review(
     start_time = time.time()
     try:
         with open(log_path, "w") as log_file:
-            result = subprocess.run(
+            proc = subprocess.Popen(
                 cmd,
                 cwd=working_dir,
-                stdout=log_file,
+                stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
-                timeout=settings.codex_review_timeout,
             )
+            last_status_time = start_time
+            line_count = 0
+            past_prompt = False
+            codex_output_lines: list[str] = []
+            for raw_line in proc.stdout:
+                log_file.write(raw_line.decode("utf-8", errors="replace"))
+                line_count += 1
+                text = raw_line.decode("utf-8", errors="replace").strip()
+
+                # Track when we're past the initial prompt echo
+                if not past_prompt and text.startswith("thinking"):
+                    past_prompt = True
+                if past_prompt:
+                    codex_output_lines.append(text)
+
+                # Show key events in console
+                if text.startswith("tool "):
+                    tool_name = text.split("(", 1)[0].replace("tool ", "")
+                    elapsed = format_duration(int(time.time() - start_time))
+                    console.print(f"  [dim][{elapsed}] tool: {tool_name}[/dim]")
+                    last_status_time = time.time()
+                elif text.startswith("exec"):
+                    elapsed = format_duration(int(time.time() - start_time))
+                    console.print(f"  [dim][{elapsed}] exec[/dim]")
+                    last_status_time = time.time()
+                elif time.time() - last_status_time >= 60:
+                    elapsed = format_duration(int(time.time() - start_time))
+                    console.print(f"  [dim][{elapsed}] processing... ({line_count} lines)[/dim]")
+                    last_status_time = time.time()
+
+            proc.wait()
 
         duration = int(time.time() - start_time)
-        log_content = log_path.read_text()
 
-        if result.returncode != 0:
-            console.print(f"[red]Codex review failed (exit code {result.returncode}, {format_duration(duration)})[/red]")
+        if proc.returncode != 0:
+            console.print(f"[red]Codex review failed (exit code {proc.returncode}, {format_duration(duration)})[/red]")
             return False, False
 
-        is_lgtm = "LGTM" in log_content
+        # Check LGTM only in codex output (after prompt), not in the full log
+        # which contains our prompt with the word "LGTM" in instructions
+        codex_output = "\n".join(codex_output_lines)
+        is_lgtm = "LGTM" in codex_output
         console.print(
             f"[green]Codex review done ({format_duration(duration)})"
             f"{' — LGTM!' if is_lgtm else ''}[/green]"
         )
         return True, is_lgtm
 
-    except subprocess.TimeoutExpired:
-        console.print(f"[red]Codex review timed out ({settings.codex_review_timeout}s)[/red]")
-        return False, False
     except Exception as e:
         console.print(f"[red]Codex review error: {e}[/red]")
         return False, False

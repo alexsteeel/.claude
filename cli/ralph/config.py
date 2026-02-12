@@ -31,7 +31,6 @@ class Settings(BaseSettings):
 
     # Codex review loop settings
     codex_review_max_iterations: int = 3
-    codex_review_timeout: int = 600  # 10 min per codex review
     codex_review_fix_timeout: int = 900  # 15 min per claude fix
     codex_review_model: str = "gpt-5.2-codex"
 

@@ -513,7 +513,6 @@ run_batch_check()                    # без изменений
 
 ```
 CODEX_REVIEW_MAX_ITERATIONS=3
-CODEX_REVIEW_TIMEOUT=600           # 10 min per codex review
 CODEX_REVIEW_FIX_TIMEOUT=900       # 15 min per claude fix
 CODEX_REVIEW_MODEL=gpt-5.2-codex
 ```

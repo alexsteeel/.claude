@@ -48,7 +48,11 @@ def send_telegram(token: str, chat_id: str, message: str) -> bool:
 
 
 class Notifier:
-    """Telegram notifier."""
+    """Telegram notifier.
+
+    Disables itself after first connection failure to avoid
+    spamming errors when Telegram is unreachable (e.g. filtered proxy).
+    """
 
     def __init__(self, token: Optional[str] = None, chat_id: Optional[str] = None):
         """Initialize notifier.
@@ -62,6 +66,7 @@ class Notifier:
 
         self.token = token
         self.chat_id = chat_id
+        self._disabled = False
 
     @property
     def is_configured(self) -> bool:
@@ -69,10 +74,13 @@ class Notifier:
         return bool(self.token and self.chat_id)
 
     def _send(self, message: str) -> bool:
-        """Send message if configured."""
-        if not self.is_configured:
+        """Send message if configured and reachable."""
+        if not self.is_configured or self._disabled:
             return False
-        return send_telegram(self.token, self.chat_id, message)
+        result = send_telegram(self.token, self.chat_id, message)
+        if not result:
+            self._disabled = True
+        return result
 
     def session_start(self, project: str, tasks: list[int]) -> bool:
         """Notify session start."""

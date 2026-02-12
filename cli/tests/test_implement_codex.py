@@ -22,7 +22,6 @@ def settings():
     return Settings(
         _env_file=None,
         codex_review_max_iterations=3,
-        codex_review_timeout=60,
         codex_review_fix_timeout=90,
         codex_review_model="gpt-5.2-codex",
     )
@@ -80,16 +79,20 @@ class TestRunCodexReview:
         assert is_lgtm is False
 
     @patch("ralph.commands.implement.shutil.which", return_value="/usr/bin/codex")
-    @patch("ralph.commands.implement.subprocess.run")
-    def test_codex_success_with_lgtm(self, mock_run, mock_which, temp_dir, settings):
+    @patch("ralph.commands.implement.subprocess.Popen")
+    def test_codex_success_with_lgtm(self, mock_popen, mock_which, temp_dir, settings):
         log_path = temp_dir / "review.log"
 
-        def write_lgtm_to_log(*args, **kwargs):
-            # Subprocess writes to the file via stdout redirect
-            log_path.write_text("Review complete. LGTM")
-            return MagicMock(returncode=0)
-
-        mock_run.side_effect = write_lgtm_to_log
+        mock_proc = MagicMock()
+        mock_proc.stdout = iter([
+            b"user\n",
+            b"prompt text with LGTM instruction\n",
+            b"thinking\n",
+            b"codex\n",
+            b"Review complete. LGTM\n",
+        ])
+        mock_proc.returncode = 0
+        mock_popen.return_value = mock_proc
 
         success, is_lgtm = run_codex_review(
             "proj#1", temp_dir, log_path, 1, settings
@@ -98,15 +101,17 @@ class TestRunCodexReview:
         assert is_lgtm is True
 
     @patch("ralph.commands.implement.shutil.which", return_value="/usr/bin/codex")
-    @patch("ralph.commands.implement.subprocess.run")
-    def test_codex_success_without_lgtm(self, mock_run, mock_which, temp_dir, settings):
+    @patch("ralph.commands.implement.subprocess.Popen")
+    def test_codex_success_without_lgtm(self, mock_popen, mock_which, temp_dir, settings):
         log_path = temp_dir / "review.log"
 
-        def write_issues_to_log(*args, **kwargs):
-            log_path.write_text("Found 2 CRITICAL issues")
-            return MagicMock(returncode=0)
-
-        mock_run.side_effect = write_issues_to_log
+        mock_proc = MagicMock()
+        mock_proc.stdout = iter([
+            b"thinking\n",
+            b"Found 2 CRITICAL issues\n",
+        ])
+        mock_proc.returncode = 0
+        mock_popen.return_value = mock_proc
 
         success, is_lgtm = run_codex_review(
             "proj#1", temp_dir, log_path, 1, settings
@@ -115,15 +120,37 @@ class TestRunCodexReview:
         assert is_lgtm is False
 
     @patch("ralph.commands.implement.shutil.which", return_value="/usr/bin/codex")
-    @patch("ralph.commands.implement.subprocess.run")
-    def test_codex_failure(self, mock_run, mock_which, temp_dir, settings):
+    @patch("ralph.commands.implement.subprocess.Popen")
+    def test_lgtm_in_prompt_not_detected(self, mock_popen, mock_which, temp_dir, settings):
+        """LGTM in prompt (before first 'thinking') must not trigger is_lgtm."""
         log_path = temp_dir / "review.log"
 
-        def write_error_to_log(*args, **kwargs):
-            log_path.write_text("Error occurred")
-            return MagicMock(returncode=1)
+        mock_proc = MagicMock()
+        mock_proc.stdout = iter([
+            b"user\n",
+            b'If no issues write "LGTM"\n',
+            b"thinking\n",
+            b"codex\n",
+            b"Found 1 MEDIUM issue\n",
+        ])
+        mock_proc.returncode = 0
+        mock_popen.return_value = mock_proc
 
-        mock_run.side_effect = write_error_to_log
+        success, is_lgtm = run_codex_review(
+            "proj#1", temp_dir, log_path, 1, settings
+        )
+        assert success is True
+        assert is_lgtm is False
+
+    @patch("ralph.commands.implement.shutil.which", return_value="/usr/bin/codex")
+    @patch("ralph.commands.implement.subprocess.Popen")
+    def test_codex_failure(self, mock_popen, mock_which, temp_dir, settings):
+        log_path = temp_dir / "review.log"
+
+        mock_proc = MagicMock()
+        mock_proc.stdout = iter([b"thinking\n", b"Error occurred\n"])
+        mock_proc.returncode = 1
+        mock_popen.return_value = mock_proc
 
         success, is_lgtm = run_codex_review(
             "proj#1", temp_dir, log_path, 1, settings
@@ -132,41 +159,33 @@ class TestRunCodexReview:
         assert is_lgtm is False
 
     @patch("ralph.commands.implement.shutil.which", return_value="/usr/bin/codex")
-    @patch("ralph.commands.implement.subprocess.run")
-    def test_codex_timeout(self, mock_run, mock_which, temp_dir, settings):
+    @patch("ralph.commands.implement.subprocess.Popen")
+    def test_first_iteration_no_uncommitted_flag(self, mock_popen, mock_which, temp_dir, settings):
         log_path = temp_dir / "review.log"
-        mock_run.side_effect = __import__("subprocess").TimeoutExpired(
-            cmd="codex", timeout=60
-        )
 
-        success, is_lgtm = run_codex_review(
-            "proj#1", temp_dir, log_path, 1, settings
-        )
-        assert success is False
-        assert is_lgtm is False
-
-    @patch("ralph.commands.implement.shutil.which", return_value="/usr/bin/codex")
-    @patch("ralph.commands.implement.subprocess.run")
-    def test_first_iteration_no_uncommitted_flag(self, mock_run, mock_which, temp_dir, settings):
-        log_path = temp_dir / "review.log"
-        log_path.write_text("LGTM")
-        mock_run.return_value = MagicMock(returncode=0)
+        mock_proc = MagicMock()
+        mock_proc.stdout = iter([b"thinking\n", b"LGTM\n"])
+        mock_proc.returncode = 0
+        mock_popen.return_value = mock_proc
 
         run_codex_review("proj#1", temp_dir, log_path, 1, settings)
 
-        cmd = mock_run.call_args[0][0]
+        cmd = mock_popen.call_args[0][0]
         assert "--uncommitted" not in cmd
 
     @patch("ralph.commands.implement.shutil.which", return_value="/usr/bin/codex")
-    @patch("ralph.commands.implement.subprocess.run")
-    def test_subsequent_iteration_has_uncommitted_flag(self, mock_run, mock_which, temp_dir, settings):
+    @patch("ralph.commands.implement.subprocess.Popen")
+    def test_subsequent_iteration_has_uncommitted_flag(self, mock_popen, mock_which, temp_dir, settings):
         log_path = temp_dir / "review.log"
-        log_path.write_text("LGTM")
-        mock_run.return_value = MagicMock(returncode=0)
+
+        mock_proc = MagicMock()
+        mock_proc.stdout = iter([b"thinking\n", b"LGTM\n"])
+        mock_proc.returncode = 0
+        mock_popen.return_value = mock_proc
 
         run_codex_review("proj#1", temp_dir, log_path, 2, settings)
 
-        cmd = mock_run.call_args[0][0]
+        cmd = mock_popen.call_args[0][0]
         assert "--uncommitted" in cmd
 
 
@@ -396,7 +415,6 @@ class TestConfigCodexSettings:
     def test_defaults(self):
         settings = Settings(_env_file=None)
         assert settings.codex_review_max_iterations == 3
-        assert settings.codex_review_timeout == 600
         assert settings.codex_review_fix_timeout == 900
         assert settings.codex_review_model == "gpt-5.2-codex"
 
@@ -404,18 +422,14 @@ class TestConfigCodexSettings:
         settings = Settings(
             _env_file=None,
             codex_review_max_iterations=5,
-            codex_review_timeout=300,
             codex_review_fix_timeout=600,
             codex_review_model="gpt-4o",
         )
         assert settings.codex_review_max_iterations == 5
-        assert settings.codex_review_timeout == 300
         assert settings.codex_review_fix_timeout == 600
         assert settings.codex_review_model == "gpt-4o"
 
     def test_from_env_vars(self, monkeypatch):
         monkeypatch.setenv("CODEX_REVIEW_MAX_ITERATIONS", "2")
-        monkeypatch.setenv("CODEX_REVIEW_TIMEOUT", "120")
         settings = Settings(_env_file=None)
         assert settings.codex_review_max_iterations == 2
-        assert settings.codex_review_timeout == 120
