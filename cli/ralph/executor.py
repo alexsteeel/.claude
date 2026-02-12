@@ -60,6 +60,7 @@ def build_prompt(
     skill: str,
     task_ref: str,
     recovery_note: Optional[str] = None,
+    extra_prompt: Optional[str] = None,
 ) -> str:
     """Build prompt for Claude execution.
 
@@ -67,10 +68,13 @@ def build_prompt(
         skill: Skill name (e.g., 'ralph-implement-python-task')
         task_ref: Task reference (e.g., 'myproject#1')
         recovery_note: Optional note about recovery context
+        extra_prompt: Optional additional instructions appended after skill invocation
     """
     prompt = f"/{skill} {task_ref}"
     if recovery_note:
         prompt = f"{recovery_note}\n\n{prompt}"
+    if extra_prompt:
+        prompt = f"{prompt}\n\n{extra_prompt}"
     return prompt
 
 

@@ -85,11 +85,14 @@ def implement(
     no_recovery: bool = typer.Option(
         False, "--no-recovery", help="Disable automatic recovery"
     ),
+    prompt: Optional[str] = typer.Option(
+        None, "--prompt", help="Additional prompt appended to each task"
+    ),
 ):
     """Autonomous implementation with recovery and notifications."""
     from .commands.implement import run_implement
 
-    raise typer.Exit(run_implement(project, tasks, working_dir, max_budget, no_recovery))
+    raise typer.Exit(run_implement(project, tasks, working_dir, max_budget, no_recovery, prompt))
 
 
 @app.command()

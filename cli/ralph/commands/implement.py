@@ -111,6 +111,7 @@ def run_implement(
     working_dir: Optional[Path] = None,
     max_budget: Optional[float] = None,
     no_recovery: bool = False,
+    extra_prompt: Optional[str] = None,
 ) -> int:
     """Run autonomous implementation for tasks."""
     settings = get_settings()
@@ -146,6 +147,7 @@ def run_implement(
         WorkingDir=str(working_dir),
         MaxBudget=str(max_budget) if max_budget else "unlimited",
         Recovery="disabled" if no_recovery else "enabled",
+        Prompt=extra_prompt or "(none)",
     )
 
     console.rule(f"[bold blue]Ralph Implementation: {project}[/bold blue]")
@@ -187,6 +189,7 @@ def run_implement(
             notifier=notifier,
             max_budget=max_budget,
             session_log=session_log,
+            extra_prompt=extra_prompt,
         )
 
         task_durations[task_num] = format_duration(result.duration_seconds)
@@ -290,6 +293,7 @@ def execute_task_with_recovery(
     notifier: Notifier,
     max_budget: Optional[float],
     session_log: SessionLog,
+    extra_prompt: Optional[str] = None,
 ) -> TaskResult:
     """Execute single task with recovery loop."""
     context_overflow_attempts = 0
@@ -308,6 +312,7 @@ def execute_task_with_recovery(
             skill="ralph-implement-python-task",
             task_ref=task_ref,
             recovery_note=recovery_note,
+            extra_prompt=extra_prompt,
         )
 
         result = run_claude(
