@@ -155,7 +155,11 @@ def run_claude(
         else:
             result = None
 
-        exit_code = process.wait()
+        try:
+            exit_code = process.wait(timeout=30)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            exit_code = process.wait()
         duration = int(time.time() - start_time)
 
         # Determine error type

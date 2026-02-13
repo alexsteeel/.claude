@@ -739,7 +739,11 @@ def run_batch_check(
             if process.stdout:
                 monitor.process_stream(process.stdout)
 
-            return_code = process.wait()
+            try:
+                return_code = process.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                return_code = process.wait()
             monitor.print_summary()
 
         # Check both process return code and monitor error type
