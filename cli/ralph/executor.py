@@ -151,7 +151,7 @@ def run_claude(
 
         # Process stream
         if process.stdout:
-            result = monitor.process_stream(process.stdout)
+            result = monitor.process_stream(process.stdout, process=process)
         else:
             result = None
 

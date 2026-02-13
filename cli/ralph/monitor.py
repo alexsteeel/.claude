@@ -1,6 +1,7 @@
 """Stream monitor for Claude JSON output."""
 
 import json
+import subprocess
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -171,6 +172,12 @@ class StreamMonitor:
     # Confirmation phrase that marks successful task completion
     CONFIRMATION_PHRASE = "I confirm that all task phases are fully completed"
 
+    # Rate limit patterns in assistant text output
+    RATE_LIMIT_PATTERNS = ("you've hit your limit", "rate limit", "too many requests")
+
+    # Kill process after this many consecutive rate limit messages
+    RATE_LIMIT_KILL_THRESHOLD = 10
+
     def __init__(
         self,
         output: TextIO = sys.stdout,
@@ -185,6 +192,8 @@ class StreamMonitor:
         self.model: Optional[str] = None
         self.error_type = ErrorType.COMPLETED
         self.confirmed = False  # True if confirmation phrase was found
+        self._consecutive_rate_limits = 0
+        self._rate_limit_killed = False
 
     def _write(self, text: str, timestamp: bool = True):
         """Write formatted output."""
@@ -249,6 +258,11 @@ class StreamMonitor:
         else:
             self._write(f"{MAGENTA}📊 {input_t:,} in / {output_t:,} out | ${cost:.2f}{NC}")
 
+    def _is_rate_limit_text(self, text: str) -> bool:
+        """Check if text is a rate limit message."""
+        text_lower = text.lower()
+        return any(p in text_lower for p in self.RATE_LIMIT_PATTERNS)
+
     def _process_assistant(self, data: dict):
         """Process assistant message."""
         message = data.get("message", {})
@@ -258,11 +272,25 @@ class StreamMonitor:
             if item.get("type") == "text":
                 text = item.get("text", "").strip()
                 if text:
-                    self._write(f"{WHITE}{text}{NC}")
+                    # Track consecutive rate limit messages
+                    if self._is_rate_limit_text(text):
+                        self._consecutive_rate_limits += 1
+                        if self._consecutive_rate_limits <= 3:
+                            self._write(f"{YELLOW}{text}{NC}")
+                        elif self._consecutive_rate_limits == 4:
+                            self._write(
+                                f"{YELLOW}... suppressing further rate limit messages "
+                                f"(kill at {self.RATE_LIMIT_KILL_THRESHOLD}){NC}"
+                            )
+                        # Don't print after 4th — just count
+                    else:
+                        self._consecutive_rate_limits = 0
+                        self._write(f"{WHITE}{text}{NC}")
                     # Check for confirmation phrase
                     if self.CONFIRMATION_PHRASE in text:
                         self.confirmed = True
             elif item.get("type") == "tool_use":
+                self._consecutive_rate_limits = 0
                 self.stats.tool_calls += 1
                 name = item.get("name", "")
                 input_data = item.get("input", {})
@@ -289,12 +317,36 @@ class StreamMonitor:
         elif msg_type == "assistant":
             self._process_assistant(data)
 
-    def process_stream(self, stream: TextIO) -> StreamResult:
-        """Process entire stream and return result."""
+    def process_stream(
+        self,
+        stream: TextIO,
+        process: Optional["subprocess.Popen"] = None,
+    ) -> StreamResult:
+        """Process entire stream and return result.
+
+        Args:
+            stream: Stream to read JSON lines from
+            process: Optional subprocess to kill on rate limit overflow
+        """
         for line in stream:
             line = line.strip()
             if line:
                 self.process_line(line)
+
+            # Kill process if rate limit spam detected
+            if (
+                self._consecutive_rate_limits >= self.RATE_LIMIT_KILL_THRESHOLD
+                and not self._rate_limit_killed
+            ):
+                self._rate_limit_killed = True
+                self.error_type = ErrorType.RATE_LIMIT
+                self._write(
+                    f"{RED}⚠ Rate limit spam detected "
+                    f"({self._consecutive_rate_limits} consecutive) — killing process{NC}"
+                )
+                if process:
+                    process.kill()
+                break
 
         return StreamResult(
             error_type=self.error_type,

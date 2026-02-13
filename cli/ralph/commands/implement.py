@@ -737,7 +737,7 @@ def run_batch_check(
 
             monitor = StreamMonitor(log_file=log_file)
             if process.stdout:
-                monitor.process_stream(process.stdout)
+                monitor.process_stream(process.stdout, process=process)
 
             try:
                 return_code = process.wait(timeout=30)
