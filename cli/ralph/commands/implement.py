@@ -161,6 +161,7 @@ def run_implement(
     completed: list[int] = []
     failed: list[int] = []
     failed_reasons: list[str] = []
+    codex_unresolved: list[int] = []
     task_durations: dict[int, str] = {}
     task_costs: dict[int, float] = {}
     total_cost: float = 0.0
@@ -212,7 +213,10 @@ def run_implement(
             if codex_ok:
                 console.print(f"[green]✓ Codex Review: LGTM[/green]")
             else:
-                console.print(f"[yellow]⚠ Codex Review: issues remain after max iterations[/yellow]")
+                console.print(f"[yellow]⚠ Codex Review: unresolved issues[/yellow]")
+                codex_unresolved.append(task_num)
+                session_log.append(f"Codex review unresolved: {task_ref}")
+                notifier.review_failed(task_ref, "Codex Review", "issues remain after fix attempt")
 
             completed.append(task_num)
 
@@ -254,6 +258,7 @@ def run_implement(
     session_log.write_summary(
         Completed=[str(t) for t in completed],
         Failed=[f"{t} ({failed_reasons[i]})" for i, t in enumerate(failed)],
+        CodexUnresolved=[str(t) for t in codex_unresolved],
     )
 
     console.rule("[bold blue]Session Complete[/bold blue]")
@@ -261,6 +266,8 @@ def run_implement(
     console.print(f"Total cost: [green]${total_cost:.2f}[/green]")
     console.print(f"Completed: [green]{len(completed)}[/green]")
     console.print(f"Failed: [red]{len(failed)}[/red]")
+    if codex_unresolved:
+        console.print(f"Codex unresolved: [yellow]{', '.join(f'#{t}' for t in codex_unresolved)}[/yellow]")
 
     # Get project stats for final report
     project_stats = get_project_stats(project)
@@ -276,6 +283,7 @@ def run_implement(
         total_cost_usd=total_cost,
         task_costs=task_costs,
         project_stats=project_stats,
+        codex_unresolved=codex_unresolved,
     )
 
     # Run batch check if any tasks completed

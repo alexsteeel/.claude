@@ -130,20 +130,9 @@ Resuming task {task_ref}"""
         total_cost_usd: float = 0.0,
         task_costs: Optional[dict[int, float]] = None,
         project_stats: Optional[dict[str, int]] = None,
+        codex_unresolved: Optional[list[int]] = None,
     ) -> bool:
-        """Notify session completion with extended stats.
-
-        Args:
-            project: Project name
-            duration: Total session duration
-            completed: List of completed task numbers
-            failed: List of failed task numbers
-            failed_reasons: Reasons for each failure
-            durations: Duration for each task
-            total_cost_usd: Total cost for all tasks
-            task_costs: Cost for each individual task
-            project_stats: Task status counts from project (e.g., {'done': 5, 'work': 1})
-        """
+        """Notify session completion with extended stats."""
         lines = [
             "📊 *RALPH SESSION COMPLETE*",
             "",
@@ -176,6 +165,11 @@ Resuming task {task_ref}"""
                     else "UNKNOWN"
                 )
                 lines.append(f"• #{task} — {escape_markdown(reason)}")
+
+        if codex_unresolved:
+            lines.append("")
+            task_list = ", ".join(f"#{t}" for t in codex_unresolved)
+            lines.append(f"⚠️ *Codex unresolved ({len(codex_unresolved)}):* {task_list}")
 
         # Add project task status summary
         if project_stats:
