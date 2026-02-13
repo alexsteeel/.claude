@@ -11,7 +11,7 @@ from rich.console import Console
 
 from ..config import Settings, get_settings
 from ..errors import ErrorType
-from ..executor import TaskResult, build_prompt, expand_task_ranges, run_claude
+from ..executor import TaskResult, build_prompt, clean_env, expand_task_ranges, run_claude
 from ..git import cleanup_working_dir
 from ..logging import SessionLog, format_duration
 from ..notify import Notifier
@@ -476,6 +476,7 @@ def run_codex_review(
                 cwd=working_dir,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
+                env=clean_env(),
             )
             last_status_time = start_time
             line_count = 0
@@ -741,6 +742,7 @@ def run_batch_check(
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
+                env=clean_env(),
             )
 
             monitor = StreamMonitor(log_file=log_file)

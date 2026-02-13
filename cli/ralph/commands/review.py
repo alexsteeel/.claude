@@ -10,6 +10,7 @@ from rich.console import Console
 from rich.table import Table
 
 from ..config import Settings, get_settings
+from ..executor import clean_env
 from ..logging import format_duration
 from ..notify import Notifier
 
@@ -138,6 +139,7 @@ def run_single_review(
                 stdout=log_file,
                 stderr=subprocess.STDOUT,
                 timeout=settings.review_timeout,
+                env=clean_env(),
             )
 
         duration = int(time.time() - start_time)

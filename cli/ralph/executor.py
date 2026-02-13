@@ -1,5 +1,6 @@
 """Claude process execution."""
 
+import os
 import re
 import subprocess
 import sys
@@ -11,6 +12,17 @@ from typing import Optional, TextIO
 from .errors import ErrorType, classify_from_text
 from .logging import TaskLog, format_duration
 from .monitor import StreamMonitor
+
+
+def clean_env() -> dict[str, str]:
+    """Return env dict with CLAUDECODE removed.
+
+    Claude Code sets CLAUDECODE to prevent accidental nested sessions.
+    We intentionally spawn child claude processes, so remove it.
+    """
+    env = os.environ.copy()
+    env.pop("CLAUDECODE", None)
+    return env
 
 
 @dataclass
@@ -147,6 +159,7 @@ def run_claude(
             stderr=subprocess.STDOUT,
             text=True,
             bufsize=1,
+            env=clean_env(),
         )
 
         # Process stream
