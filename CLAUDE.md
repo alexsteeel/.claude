@@ -95,9 +95,9 @@ The CLI automatically detects and handles failures:
 ### Recovery Loop
 
 When recoverable error detected:
-1. **Wait 10 min** → Health check
-2. **Wait 20 min** → Health check (if still failing)
-3. **Wait 30 min** → Health check (if still failing)
+1. **Wait 1 hour** → Health check
+2. **Wait 2 hours** → Health check (if still failing)
+3. **Wait 3 hours** → Health check (if still failing)
 4. **If all fail** → Stop pipeline, send Telegram alert
 
 ### Configuration
@@ -111,7 +111,7 @@ TELEGRAM_CHAT_ID="-1001234567890"
 
 # Recovery settings
 RECOVERY_ENABLED=true
-RECOVERY_DELAYS="600,1200,1800"  # 10, 20, 30 minutes
+RECOVERY_DELAYS="3600,7200,10800"  # 1, 2, 3 hours
 CONTEXT_OVERFLOW_MAX_RETRIES=2
 ```
 
